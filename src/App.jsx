@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Menu, X, Calendar, Users, BookOpen, ExternalLink, Mail, Instagram, Linkedin, ChevronRight, Phone, MapPin, Star, Award, UserCheck, Edit3, Plus, Trash2, Save, Lock, Camera, Upload } from 'lucide-react';
-import { supabase } from './supabase';
+import { supabase } from '../supabase';
 
 // 멤버 데이터 (이전과 동일)
 const LEADERSHIP = [
