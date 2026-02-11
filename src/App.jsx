@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Menu, X, Calendar, Users, BookOpen, ExternalLink, Mail, Instagram, Linkedin, ChevronRight, Phone, MapPin, Star, Award, UserCheck, Edit3, Plus, Trash2, Save, Lock, Camera, Upload } from 'lucide-react';
-import { supabase } from '../supabase';
+import { supabase } from './supabase';
 
 // 멤버 데이터 (이전과 동일)
 const LEADERSHIP = [
@@ -12,7 +12,7 @@ const LEADERSHIP = [
 const STAFF = [
   { name: "성용훈", role: "대표", company: "(주)재원엠앤티", phone: "010-8882-6515", email: "syh6515@gmail.com", location: "서울", profile_link: "", mbti: "", interests: "트렌드, AI, 창작", bio: "의류패션산업에 종사하고 있는 성용훈 입니다.", shared_link: "https://www.fila.co.kr/brand/tennis/view.asp?num=1599", image: "/images/성용훈.jpeg", group: "운영진" },
   { name: "정다희", role: "대표이사", company: "크레디아", phone: "010-8742-4020", email: "dahee@credia.co.kr", location: "서울", profile_link: "http://www.credia.co.kr", mbti: "", interests: "공연 유통, 컨텐츠 유통, 공간 임대 수익모델", bio: "학력\n중앙대학교 예술경영과 석사\n서울예술대학교 사진과 학사\n\n경력\n현) CREDIA 대표\n전) CIELOS & CLUB BALCONY 매니저\n전) S SHINSEGAE STYLE 에디터", shared_link: "", image: "/images/정다희.jpeg", group: "운영진" },
-  { name: "서성권", role: "대표", company: "주식회사 클링커즈", phone: "010-9430-3795", email: "skcrackers@gmail.com", location: "서울", profile_link: "https://www.instagram.com/skcrackers/", mbti: "ESTJ 경영가", interests: "AI, 투자, 글로벌 진출", bio: "안녕하세요. 서성권입니다.(테스트)", shared_link: "https://app.glo-w.io/", image: "/images/서성권.png", group: "운영진" }
+  { name: "서성권", role: "대표", company: "주식회사 클링커즈", phone: "010-9430-3795", email: "skcrackers@gmail.com", location: "서울", profile_link: "https://www.instagram.com/skcrackers/", mbti: "ESTJ 경영가", interests: "AI, 투자, 글로벌 진출", bio: "안녕하세요. 클링커즈를 운영하고 있는 서성권입니다. 현재는 국내에 거주하는 외국인근로자를 위한 금융플랫폼을 만들고 있습니다. 개인투자도 함께 진행하고 있습니다. IT, 특히 핀테크 관련분야나, 금융기관 연결등 기여할 수 있는 부분이 있습니다.", shared_link: "https://app.glo-w.io/", image: "/images/서성권.png", group: "운영진" }
 ];
 
 const MEMBERS = [
@@ -40,10 +40,12 @@ const QLWebsite = () => {
   const [selectedMember, setSelectedMember] = useState(null);
   const [scrolled, setScrolled] = useState(false);
   
+  // 로그인 관련 상태
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [loginPassword, setLoginPassword] = useState('');
+  
   // 편집 모드 관련 상태
   const [editMode, setEditMode] = useState(false);
-  const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
-  const [password, setPassword] = useState('');
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -60,6 +62,18 @@ const QLWebsite = () => {
 
   const ADMIN_PASSWORD = 'ql2026';
   const MAX_IMAGES = 100;
+
+  // 로그인 처리
+  const handleLogin = () => {
+    if (loginPassword === ADMIN_PASSWORD) {
+      setIsAuthenticated(true);
+      setLoginPassword('');
+      sessionStorage.setItem('ql-auth', 'true');
+    } else {
+      alert('비밀번호가 틀렸습니다.');
+      setLoginPassword('');
+    }
+  };
 
   // 🔥 Supabase에서 이벤트 불러오기
   const fetchEvents = async () => {
@@ -107,22 +121,17 @@ const QLWebsite = () => {
     };
     window.addEventListener('scroll', handleScroll);
     
+    // 인증 상태 확인
+    const isAuth = sessionStorage.getItem('ql-auth');
+    if (isAuth === 'true') {
+      setIsAuthenticated(true);
+    }
+    
     // Supabase에서 이벤트 불러오기
     fetchEvents();
     
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
-
-  const handlePasswordSubmit = () => {
-    if (password === ADMIN_PASSWORD) {
-      setEditMode(true);
-      setShowPasswordPrompt(false);
-      setPassword('');
-    } else {
-      alert('비밀번호가 틀렸습니다.');
-      setPassword('');
-    }
-  };
 
   // 🔥 이미지 업로드 (Supabase Storage)
   const uploadImages = async (files, eventId) => {
@@ -391,11 +400,43 @@ const QLWebsite = () => {
     </div>
   );
 
+  // 로그인 화면
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-amber-950 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl">
+          <div className="flex items-center justify-center mb-6">
+            <div className="w-16 h-16 bg-gradient-to-br from-amber-600 to-amber-800 rounded-lg flex items-center justify-center shadow-lg">
+              <span className="text-white font-bold text-3xl">Q</span>
+            </div>
+          </div>
+          <h2 className="text-2xl font-light text-center mb-2">문화산업포럼 Q.L</h2>
+          <p className="text-slate-600 text-center mb-6">회원 전용 페이지입니다</p>
+          <input
+            type="password"
+            value={loginPassword}
+            onChange={(e) => setLoginPassword(e.target.value)}
+            onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
+            placeholder="비밀번호를 입력하세요"
+            className="w-full px-4 py-3 border border-slate-300 rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-amber-500"
+            autoFocus
+          />
+          <button
+            onClick={handleLogin}
+            className="w-full bg-amber-600 hover:bg-amber-700 text-white py-3 rounded-lg transition-colors font-medium"
+          >
+            입장하기
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-amber-50">
       {/* 편집 모드 플로팅 버튼 */}
       <button
-        onClick={() => editMode ? setEditMode(false) : setShowPasswordPrompt(true)}
+        onClick={() => setEditMode(!editMode)}
         className={`fixed bottom-6 right-6 z-40 p-4 rounded-full shadow-2xl transition-all duration-300 ${
           editMode ? 'bg-red-600 hover:bg-red-700' : 'bg-amber-600 hover:bg-amber-700'
         } text-white`}
@@ -404,42 +445,6 @@ const QLWebsite = () => {
       </button>
 
       {/* 비밀번호 프롬프트 */}
-      {showPasswordPrompt && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl">
-            <div className="flex items-center space-x-3 mb-6">
-              <Lock className="w-6 h-6 text-amber-600" />
-              <h3 className="text-2xl font-medium text-slate-900">편집 모드</h3>
-            </div>
-            <p className="text-slate-600 mb-4">이벤트를 추가/수정하려면 비밀번호를 입력하세요</p>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handlePasswordSubmit()}
-              placeholder="비밀번호"
-              className="w-full px-4 py-3 border border-slate-300 rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-amber-500"
-            />
-            <div className="flex space-x-3">
-              <button
-                onClick={handlePasswordSubmit}
-                className="flex-1 bg-amber-600 hover:bg-amber-700 text-white py-3 rounded-lg transition-colors"
-              >
-                확인
-              </button>
-              <button
-                onClick={() => {
-                  setShowPasswordPrompt(false);
-                  setPassword('');
-                }}
-                className="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 py-3 rounded-lg transition-colors"
-              >
-                취소
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* 이벤트 폼 모달 */}
       {showEventForm && (
@@ -584,7 +589,7 @@ const QLWebsite = () => {
                 <X className="w-6 h-6" />
               </button>
             </div>
-            <div className="grid grid-cols-3 gap-4 max-h-[80vh] overflow-y-auto">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-[80vh] overflow-y-auto">
               {selectedEventGallery.images.map((image, idx) => (
                 <img key={idx} src={image} alt={`${selectedEventGallery.title} ${idx + 1}`} className="w-full aspect-square object-cover rounded-lg" />
               ))}
@@ -760,7 +765,7 @@ const QLWebsite = () => {
               <Star className="w-6 h-6 text-amber-600" />
               <h4 className="text-3xl font-light text-slate-900">대표단</h4>
             </div>
-            <div className="grid grid-cols-3 gap-4 sm:gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
               {LEADERSHIP.map((member, idx) => (
                 <MemberCard key={idx} member={member} />
               ))}
@@ -773,7 +778,7 @@ const QLWebsite = () => {
               <Award className="w-6 h-6 text-blue-600" />
               <h4 className="text-3xl font-light text-slate-900">운영진</h4>
             </div>
-            <div className="grid grid-cols-3 gap-4 sm:gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
               {STAFF.map((member, idx) => (
                 <MemberCard key={idx} member={member} />
               ))}
@@ -786,7 +791,7 @@ const QLWebsite = () => {
               <UserCheck className="w-6 h-6 text-emerald-600" />
               <h4 className="text-3xl font-light text-slate-900">회원</h4>
             </div>
-            <div className="grid grid-cols-3 gap-4 sm:gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
               {MEMBERS.map((member, idx) => (
                 <MemberCard key={idx} member={member} />
               ))}

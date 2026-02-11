@@ -1,0 +1,12 @@
+User-agent: *
+Disallow: /
+
+# 모든 검색엔진 크롤링 차단
+User-agent: Googlebot
+Disallow: /
+
+User-agent: Bingbot
+Disallow: /
+
+User-agent: Slurp
+Disallow: /
