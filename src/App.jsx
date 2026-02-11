@@ -23,7 +23,7 @@ const MEMBERS = [
   { name: "박희정", role: "대표약사 / 대표", company: "센느약국", phone: "010-9620-1750", email: "buingng@gmail.com", location: "서울 강남", profile_link: "heejung_parkk / instagram", mbti: "ESTJ 경영가", interests: "마케팅. 유통 수익모델. 브랜딩", bio: "센느약국 대표약사. 대학병원 원내약국, 제약회사 마케팅과 사업개발, MBA 경험을 토대로 강남에서 다이어트 전문약국 운영중.", shared_link: "", image: "/images/박희정.jpeg", group: "회원" },
   { name: "백세린", role: "연주자", company: "서울챔버오케스트라", phone: "010-8626-3527", email: "dami3527@gmail.com", location: "서울", profile_link: "", mbti: "ESFP 연예인", interests: "투자", bio: "세계적인 바이올리니스트 Maxim Vengerov로부터 \"Wonderful playing\"이라는 극찬을 받은 바이올리니스트. 예원학교와 서울예술고등학교를 거쳐 연세대학교 음악대학에서 악장 역임 및 최우등상을 수상하며 수석으로 졸업.", shared_link: "", image: "/images/백세린.jpeg", group: "회원" },
   { name: "손승현", role: "대표 원장", company: "괜찮아 정신건강의학과 의원", phone: "010-5712-0919", email: "narannamja@gmail.com", location: "서울", profile_link: "https://www.instagram.com/kinghong8888", mbti: "INTP 논리술사", interests: "신간 출판, 여유시간 확보, 체중 감량", bio: "안녕하세요 괜찮아 정신건강의학과 의원의 손승현입니다. 세부전공은 소아 청소년 정신의학입니다.", shared_link: "https://okmind.co.kr/", image: "/images/손승현.jpg", group: "회원" },
-  { name: "양준철", role: "대표", company: "(주)온오프믹스", phone: "010-3048-5578", email: "promise4u@gmail.com", location: "서울", profile_link: "https://linkedin.com/in/promise4u , https://instagram.com/promise4u", mbti: "ENTP 변론가", interests: "M&A, 투자", bio: "엔지니어 출신 창업가로 2001년 부터 벤처 창업 길에 올라서 스타트업 활성화를 위한 다양한 활동을 해왔습니다. MICE 시장의 디지털 전환을 목표로 ONOFFMIX.COM 이라는 이벤트 테크 플랫폼을 만들어 운영해 왔습니다.", shared_link: "", image: "/images/양준철.jpg", group: "회원" },
+  { name: "양준철", role: "대표", company: "(주)온오프믹스", phone: "010-3048-5578", email: "promise4u@gmail.com", location: "서울", profile_link: "https://linkedin.com/in/promise4u", mbti: "ENTP 변론가", interests: "M&A, 투자", bio: "엔지니어 출신 창업가로 2001년 부터 벤처 창업 길에 올라서 스타트업 활성화를 위한 다양한 활동을 해왔습니다. MICE 시장의 디지털 전환을 목표로 ONOFFMIX.COM 이라는 이벤트 테크 플랫폼을 만들어 운영해 왔습니다.", shared_link: "https://instagram.com/promise4u", image: "/images/양준철.jpg", group: "회원" },
   { name: "이수지", role: "기획자, 디자이너", company: "뉴럴아케이드/이수지", phone: "010-9123-5600", email: "2sudie@gmail.com", location: "서울", profile_link: "", mbti: "ENFP 활동가", interests: "AI, 숏폼, 미국", bio: "IT 스타트업에서 기획자 출신 창업자로 10+년. 두번 M&A 됨. 26년에 세번째 회사를 설립해서 AI 챗봇 기반 앱 팩토리 테크 영역에서 매년 4~12개의 앱을 런칭해나갈 예정입니다.", shared_link: "https://www.neuralarcade.ai/", image: "/images/이수지.jpg", group: "회원" },
   { name: "이연지", role: "연주자", company: "피아니스트 이연지", phone: "010-9187-9507", email: "leeyunji95@gmail.com", location: "서울, 인천", profile_link: "instagram.com/artsofyonji", mbti: "ESTP 사업가", interests: "브랜딩", bio: "안녕하세요, 저는 피아니스트 이연지입니다. 연주자이자 교육자로 활동하고 있으며, 작년에는 제 이름 고울 연 자를 딴 고울클래식이라는 대회개최업체의 대표로 콩쿠르를 개최하고 운영하였습니다.", shared_link: "", image: "/images/이연지.jpeg", group: "회원" },
   { name: "홍석희", role: "대표", company: "인플루러닝", phone: "010-3151-8821", email: "kowell21@gmail.com", location: "서울, 경기", profile_link: "", mbti: "ENFJ 선도자", interests: "ai, 콘텐트, 글로벌", bio: "인플루언서를 기반으로 영어 교육 사업을 하고 있습니다.", shared_link: "", image: "/images/홍석희.png", group: "회원" },
@@ -45,7 +45,7 @@ const QLWebsite = () => {
   const [loginPassword, setLoginPassword] = useState('');
   
   // 편집 모드 관련 상태
-  const [editMode, setEditMode] = useState(false);
+  const [editMode, setEditMode] = useState(true); // 로그인 후 자동 편집모드
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -434,18 +434,6 @@ const QLWebsite = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-amber-50">
-      {/* 편집 모드 플로팅 버튼 */}
-      <button
-        onClick={() => setEditMode(!editMode)}
-        className={`fixed bottom-6 right-6 z-40 p-4 rounded-full shadow-2xl transition-all duration-300 ${
-          editMode ? 'bg-red-600 hover:bg-red-700' : 'bg-amber-600 hover:bg-amber-700'
-        } text-white`}
-      >
-        {editMode ? <X className="w-6 h-6" /> : <Edit3 className="w-6 h-6" />}
-      </button>
-
-      {/* 비밀번호 프롬프트 */}
-
       {/* 이벤트 폼 모달 */}
       {showEventForm && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
