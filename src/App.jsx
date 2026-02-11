@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Menu, X, Calendar, Users, BookOpen, ExternalLink, Mail, Instagram, Linkedin, ChevronRight, Phone, MapPin, Star, Award, UserCheck, Edit3, Plus, Trash2, Save, Lock, Camera, Upload } from 'lucide-react';
+import { supabase } from './supabase';
 
 // 멤버 데이터 (이전과 동일)
 const LEADERSHIP = [
@@ -44,13 +45,15 @@ const QLWebsite = () => {
   const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
   const [password, setPassword] = useState('');
   const [events, setEvents] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [showEventForm, setShowEventForm] = useState(false);
   const [editingEvent, setEditingEvent] = useState(null);
   const [eventForm, setEventForm] = useState({
     title: '',
     date: '',
     description: '',
-    images: []
+    imageFiles: []
   });
   const [dragActive, setDragActive] = useState(false);
   const [selectedEventGallery, setSelectedEventGallery] = useState(null);
@@ -58,24 +61,57 @@ const QLWebsite = () => {
   const ADMIN_PASSWORD = 'ql2026';
   const MAX_IMAGES = 100;
 
+  // 🔥 Supabase에서 이벤트 불러오기
+  const fetchEvents = async () => {
+    setLoading(true);
+    try {
+      const { data: eventsData, error: eventsError } = await supabase
+        .from('events')
+        .select('*')
+        .order('date', { ascending: false });
+
+      if (eventsError) throw eventsError;
+
+      const eventsWithImages = await Promise.all(
+        eventsData.map(async (event) => {
+          const { data: imagesData, error: imagesError } = await supabase
+            .from('event_images')
+            .select('image_url, order_index')
+            .eq('event_id', event.id)
+            .order('order_index', { ascending: true });
+
+          if (imagesError) {
+            console.error('Error fetching images:', imagesError);
+            return { ...event, images: [] };
+          }
+
+          return {
+            ...event,
+            images: imagesData.map(img => img.image_url)
+          };
+        })
+      );
+
+      setEvents(eventsWithImages);
+    } catch (error) {
+      console.error('Error fetching events:', error);
+      alert('이벤트를 불러오는데 실패했습니다.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     const handleScroll = () => {
       setScrolled(window.scrollY > 50);
     };
     window.addEventListener('scroll', handleScroll);
     
-    const savedEvents = localStorage.getItem('ql-events');
-    if (savedEvents) {
-      setEvents(JSON.parse(savedEvents));
-    }
+    // Supabase에서 이벤트 불러오기
+    fetchEvents();
     
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
-
-  const saveEvents = (newEvents) => {
-    localStorage.setItem('ql-events', JSON.stringify(newEvents));
-    setEvents(newEvents);
-  };
 
   const handlePasswordSubmit = () => {
     if (password === ADMIN_PASSWORD) {
@@ -86,6 +122,34 @@ const QLWebsite = () => {
       alert('비밀번호가 틀렸습니다.');
       setPassword('');
     }
+  };
+
+  // 🔥 이미지 업로드 (Supabase Storage)
+  const uploadImages = async (files, eventId) => {
+    const uploadedUrls = [];
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${eventId}/${Date.now()}_${i}.${fileExt}`;
+
+      const { data, error } = await supabase.storage
+        .from('event-images')
+        .upload(fileName, file);
+
+      if (error) {
+        console.error('Upload error:', error);
+        continue;
+      }
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('event-images')
+        .getPublicUrl(fileName);
+
+      uploadedUrls.push(publicUrl);
+    }
+
+    return uploadedUrls;
   };
 
   const handleDrag = (e) => {
@@ -110,37 +174,24 @@ const QLWebsite = () => {
 
   const handleImageFiles = (files) => {
     const imageFiles = files.filter(file => file.type.startsWith('image/'));
-    const remainingSlots = MAX_IMAGES - eventForm.images.length;
-    const filesToProcess = imageFiles.slice(0, remainingSlots);
+    const remainingSlots = MAX_IMAGES - eventForm.imageFiles.length;
+    const filesToAdd = imageFiles.slice(0, remainingSlots);
     
-    if (filesToProcess.length === 0) {
+    if (filesToAdd.length === 0) {
       alert(`최대 ${MAX_IMAGES}장까지만 업로드할 수 있습니다.`);
       return;
     }
 
-    let processed = 0;
-    const newImages = [];
-
-    filesToProcess.forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        newImages.push(e.target.result);
-        processed++;
-        
-        if (processed === filesToProcess.length) {
-          setEventForm({
-            ...eventForm,
-            images: [...eventForm.images, ...newImages]
-          });
-        }
-      };
-      reader.readAsDataURL(file);
+    // File 객체 그대로 저장 (base64 변환 없음)
+    setEventForm({
+      ...eventForm,
+      imageFiles: [...eventForm.imageFiles, ...filesToAdd]
     });
   };
 
-  const removeImage = (index) => {
-    const newImages = eventForm.images.filter((_, i) => i !== index);
-    setEventForm({ ...eventForm, images: newImages });
+  const removeImageFile = (index) => {
+    const newFiles = eventForm.imageFiles.filter((_, i) => i !== index);
+    setEventForm({ ...eventForm, imageFiles: newFiles });
   };
 
   const openEventForm = (event = null) => {
@@ -149,49 +200,143 @@ const QLWebsite = () => {
       setEventForm({
         title: event.title,
         date: event.date,
-        description: event.description,
-        images: event.images || []
+        description: event.description || '',
+        imageFiles: [] // 기존 이미지는 URL로 표시, 새 이미지만 추가
       });
     } else {
       setEditingEvent(null);
-      setEventForm({ title: '', date: '', description: '', images: [] });
+      setEventForm({ title: '', date: '', description: '', imageFiles: [] });
     }
     setShowEventForm(true);
   };
 
-  const saveEvent = () => {
+  const saveEvent = async () => {
     if (!eventForm.title || !eventForm.date) {
       alert('제목과 날짜는 필수입니다.');
       return;
     }
 
-    let updatedEvents;
-    if (editingEvent) {
-      // 수정
-      updatedEvents = events.map(e => 
-        e.id === editingEvent.id 
-          ? { ...editingEvent, ...eventForm }
-          : e
-      );
-    } else {
-      // 새로 추가
-      const newEvent = {
-        id: Date.now(),
-        ...eventForm
-      };
-      updatedEvents = [...events, newEvent];
+    setUploading(true);
+
+    try {
+      if (editingEvent) {
+        // 수정
+        const { error: updateError } = await supabase
+          .from('events')
+          .update({
+            title: eventForm.title,
+            date: eventForm.date,
+            description: eventForm.description,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', editingEvent.id);
+
+        if (updateError) throw updateError;
+
+        // 새 이미지 업로드
+        if (eventForm.imageFiles.length > 0) {
+          const imageUrls = await uploadImages(eventForm.imageFiles, editingEvent.id);
+          
+          const { data: existingImages } = await supabase
+            .from('event_images')
+            .select('order_index')
+            .eq('event_id', editingEvent.id)
+            .order('order_index', { ascending: false })
+            .limit(1);
+
+          const startIndex = existingImages && existingImages.length > 0 ? existingImages[0].order_index + 1 : 0;
+
+          const imageRecords = imageUrls.map((url, idx) => ({
+            event_id: editingEvent.id,
+            image_url: url,
+            order_index: startIndex + idx
+          }));
+
+          const { error: imagesError } = await supabase
+            .from('event_images')
+            .insert(imageRecords);
+
+          if (imagesError) throw imagesError;
+        }
+
+      } else {
+        // 새로 추가
+        const { data: newEvent, error: insertError } = await supabase
+          .from('events')
+          .insert([{
+            title: eventForm.title,
+            date: eventForm.date,
+            description: eventForm.description
+          }])
+          .select()
+          .single();
+
+        if (insertError) throw insertError;
+
+        // 이미지 업로드
+        if (eventForm.imageFiles.length > 0) {
+          const imageUrls = await uploadImages(eventForm.imageFiles, newEvent.id);
+          
+          const imageRecords = imageUrls.map((url, idx) => ({
+            event_id: newEvent.id,
+            image_url: url,
+            order_index: idx
+          }));
+
+          const { error: imagesError } = await supabase
+            .from('event_images')
+            .insert(imageRecords);
+
+          if (imagesError) throw imagesError;
+        }
+      }
+
+      await fetchEvents();
+      setShowEventForm(false);
+      setEditingEvent(null);
+      setEventForm({ title: '', date: '', description: '', imageFiles: [] });
+      alert('저장되었습니다!');
+
+    } catch (error) {
+      console.error('Save error:', error);
+      alert('저장에 실패했습니다: ' + error.message);
+    } finally {
+      setUploading(false);
     }
-    
-    saveEvents(updatedEvents);
-    setShowEventForm(false);
-    setEditingEvent(null);
-    setEventForm({ title: '', date: '', description: '', images: [] });
   };
 
-  const deleteEvent = (id) => {
-    if (confirm('이 이벤트를 삭제하시겠습니까?')) {
-      const updatedEvents = events.filter(e => e.id !== id);
-      saveEvents(updatedEvents);
+  const deleteEvent = async (event) => {
+    if (!confirm('이 이벤트를 삭제하시겠습니까?')) return;
+
+    try {
+      // Storage에서 이미지 파일 삭제
+      if (event.images && event.images.length > 0) {
+        const filePaths = event.images.map(url => {
+          const path = url.split('/event-images/')[1];
+          return path;
+        }).filter(Boolean);
+
+        if (filePaths.length > 0) {
+          await supabase.storage
+            .from('event-images')
+            .remove(filePaths);
+        }
+      }
+
+      // DB에서 이벤트 삭제 (CASCADE로 event_images도 자동 삭제됨)
+      const { error } = await supabase
+        .from('events')
+        .delete()
+        .eq('id', event.id);
+
+      if (error) throw error;
+
+      await fetchEvents();
+      alert('삭제되었습니다!');
+
+    } catch (error) {
+      console.error('Delete error:', error);
+      alert('삭제에 실패했습니다: ' + error.message);
     }
   };
 
@@ -346,7 +491,7 @@ const QLWebsite = () => {
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">
-                  사진 ({eventForm.images.length}/{MAX_IMAGES})
+                  사진 ({eventForm.imageFiles.length}/{MAX_IMAGES})
                 </label>
                 
                 {/* 드래그앤드롭 영역 */}
@@ -361,7 +506,7 @@ const QLWebsite = () => {
                 >
                   <Upload className="w-12 h-12 text-slate-400 mx-auto mb-4" />
                   <p className="text-slate-600 mb-2">여러 사진을 드래그하거나 클릭하여 업로드</p>
-                  <p className="text-sm text-slate-500 mb-4">최대 {MAX_IMAGES}장까지 (현재 {eventForm.images.length}장)</p>
+                  <p className="text-sm text-slate-500 mb-4">최대 {MAX_IMAGES}장까지 (현재 {eventForm.imageFiles.length}장)</p>
                   <input
                     type="file"
                     accept="image/*"
@@ -379,17 +524,24 @@ const QLWebsite = () => {
                 </div>
 
                 {/* 이미지 미리보기 그리드 */}
-                {eventForm.images.length > 0 && (
+                {eventForm.imageFiles.length > 0 && (
                   <div className="grid grid-cols-4 gap-3">
-                    {eventForm.images.map((image, idx) => (
+                    {eventForm.imageFiles.map((file, idx) => (
                       <div key={idx} className="relative group aspect-square">
-                        <img src={image} alt={`Preview ${idx + 1}`} className="w-full h-full object-cover rounded-lg" />
+                        <img 
+                          src={URL.createObjectURL(file)} 
+                          alt={`Preview ${idx + 1}`} 
+                          className="w-full h-full object-cover rounded-lg" 
+                        />
                         <button
-                          onClick={() => removeImage(idx)}
+                          onClick={() => removeImageFile(idx)}
                           className="absolute top-1 right-1 p-1.5 bg-red-600 hover:bg-red-700 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
                         >
                           <X className="w-4 h-4" />
                         </button>
+                        <div className="absolute bottom-1 left-1 bg-black/70 text-white px-2 py-1 rounded text-xs">
+                          {idx + 1}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -400,14 +552,20 @@ const QLWebsite = () => {
             <div className="p-8 border-t border-slate-200 flex space-x-3">
               <button
                 onClick={saveEvent}
-                className="flex-1 bg-amber-600 hover:bg-amber-700 text-white py-3 rounded-lg transition-colors flex items-center justify-center space-x-2"
+                disabled={uploading}
+                className={`flex-1 py-3 rounded-lg transition-colors flex items-center justify-center space-x-2 font-medium ${
+                  uploading 
+                    ? 'bg-slate-400 cursor-not-allowed text-white'
+                    : 'bg-amber-600 hover:bg-amber-700 text-white'
+                }`}
               >
                 <Save className="w-5 h-5" />
-                <span>저장</span>
+                <span>{uploading ? '저장 중...' : '저장'}</span>
               </button>
               <button
                 onClick={() => setShowEventForm(false)}
-                className="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 py-3 rounded-lg transition-colors"
+                disabled={uploading}
+                className="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 py-3 rounded-lg transition-colors disabled:opacity-50"
               >
                 취소
               </button>
@@ -658,8 +816,12 @@ const QLWebsite = () => {
             </div>
           )}
 
-          {/* 이벤트 목록 */}
-          {events.length > 0 && (
+          {/* 로딩 상태 */}
+          {loading ? (
+            <div className="text-center py-20">
+              <p className="text-slate-500">이벤트를 불러오는 중...</p>
+            </div>
+          ) : events.length > 0 ? (
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
               {events.map((event) => (
                 <div key={event.id} className="bg-white rounded-2xl overflow-hidden shadow-lg border border-slate-100 hover:shadow-xl transition-all duration-300 group">
@@ -695,7 +857,7 @@ const QLWebsite = () => {
                             <Edit3 className="w-5 h-5" />
                           </button>
                           <button
-                            onClick={() => deleteEvent(event.id)}
+                            onClick={() => deleteEvent(event)}
                             className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                           >
                             <Trash2 className="w-5 h-5" />
@@ -709,6 +871,10 @@ const QLWebsite = () => {
                   </div>
                 </div>
               ))}
+            </div>
+          ) : (
+            <div className="text-center py-20">
+              <p className="text-slate-500">아직 이벤트가 없습니다.</p>
             </div>
           )}
 
@@ -897,10 +1063,20 @@ const QLWebsite = () => {
                         href={selectedMember.profile_link.startsWith('http') ? selectedMember.profile_link : `https://${selectedMember.profile_link}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center space-x-2 text-amber-700 hover:text-amber-800 transition-colors group"
+                        className={`flex items-center space-x-2 transition-colors group ${
+                          selectedMember.profile_link.includes('linkedin') 
+                            ? 'text-[#0A66C2] hover:text-[#004182]' 
+                            : 'text-amber-700 hover:text-amber-800'
+                        }`}
                       >
-                        <ExternalLink className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                        <span className="underline">프로필 보기</span>
+                        {selectedMember.profile_link.includes('linkedin') ? (
+                          <Linkedin className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                        ) : (
+                          <ExternalLink className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                        )}
+                        <span className="underline">
+                          {selectedMember.profile_link.includes('linkedin') ? 'LinkedIn' : '프로필 보기'}
+                        </span>
                       </a>
                     )}
                     {selectedMember.shared_link && selectedMember.shared_link !== selectedMember.profile_link && (
@@ -908,10 +1084,20 @@ const QLWebsite = () => {
                         href={selectedMember.shared_link.startsWith('http') ? selectedMember.shared_link : `https://${selectedMember.shared_link}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center space-x-2 text-amber-700 hover:text-amber-800 transition-colors group"
+                        className={`flex items-center space-x-2 transition-colors group ${
+                          selectedMember.shared_link.includes('instagram') 
+                            ? 'text-[#E4405F] hover:text-[#C13584]' 
+                            : 'text-amber-700 hover:text-amber-800'
+                        }`}
                       >
-                        <ExternalLink className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                        <span className="underline">추가 링크</span>
+                        {selectedMember.shared_link.includes('instagram') ? (
+                          <Instagram className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                        ) : (
+                          <ExternalLink className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                        )}
+                        <span className="underline">
+                          {selectedMember.shared_link.includes('instagram') ? 'Instagram' : '추가 링크'}
+                        </span>
                       </a>
                     )}
                   </div>
