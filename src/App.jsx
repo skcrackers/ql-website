@@ -434,8 +434,8 @@ const QLWebsite = () => {
         
         {member.interests && (
           <div className="flex flex-wrap gap-2 mt-4">
-            {member.interests.split(',').slice(0, 2).map((interest, i) => (
-              <span key={i} className="px-3 py-1 bg-amber-50 text-amber-700 text-xs rounded-full">
+            {member.interests.split(/[;,]/).map((interest, i) => (
+              <span key={i} className="px-3 py-1 bg-amber-50 text-amber-700 text-xs rounded-full whitespace-nowrap">
                 {interest.trim()}
               </span>
             ))}
