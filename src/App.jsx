@@ -647,8 +647,11 @@ const QLWebsite = () => {
 
       {/* 이벤트 상세보기 모달 - 사이드바 레이아웃 */}
       {selectedEventGallery && (
-        <div className="fixed inset-0 bg-black/90 z-[60] flex items-center justify-center p-4 overflow-y-auto" onClick={() => setSelectedEventGallery(null)}>
-          <div className="max-w-7xl w-full my-8" onClick={(e) => e.stopPropagation()}>
+        <div 
+          className="fixed inset-0 bg-black/90 z-[60] flex items-start justify-center overflow-y-auto" 
+          onClick={() => setSelectedEventGallery(null)}
+        >
+          <div className="w-full max-w-7xl p-4 my-8" onClick={(e) => e.stopPropagation()}>
             {/* 닫기 버튼 - 고정 위치 */}
             <button 
               onClick={() => setSelectedEventGallery(null)} 
@@ -661,7 +664,7 @@ const QLWebsite = () => {
             <div className="flex flex-col lg:flex-row gap-6">
               {/* 왼쪽 정보 사이드바 (데스크톱) / 상단 (모바일) */}
               <div className="lg:w-80 flex-shrink-0">
-                <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20 sticky top-4">
+                <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20 lg:sticky lg:top-4">
                   <h3 className="text-2xl font-semibold text-white mb-4 pr-8">
                     {selectedEventGallery.title}
                   </h3>
