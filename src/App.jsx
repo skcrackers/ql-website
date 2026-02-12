@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Menu, X, Calendar, Users, BookOpen, ExternalLink, Mail, Instagram, Linkedin, ChevronRight, Phone, MapPin, Star, Award, UserCheck, Edit3, Plus, Trash2, Save, Lock, Camera, Upload } from 'lucide-react';
 import { supabase } from '../supabase';
+import CalendarSection from './CalendarSection';
 
 // 멤버 데이터 (CSV 2026-02-12 기준)
 const LEADERSHIP = [
@@ -396,7 +397,8 @@ const QLWebsite = () => {
     { name: 'Home', id: 'home' },
     { name: 'Culture Code', id: 'culture' },
     { name: 'Members', id: 'members' },
-    { name: 'Events', id: 'events' }
+    { name: 'Events', id: 'events' },
+    { name: 'Calendar', id: 'calendar' }
   ];
 
   const MemberCard = ({ member }) => (
@@ -1052,6 +1054,9 @@ const QLWebsite = () => {
           </div>
         </div>
       </section>
+
+      {/* Calendar Section */}
+      <CalendarSection editMode={editMode} />
 
       {/* Footer */}
       <footer className="bg-slate-900 text-white py-12 px-4">
