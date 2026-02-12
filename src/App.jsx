@@ -55,7 +55,8 @@ const QLWebsite = () => {
     title: '',
     date: '',
     description: '',
-    imageFiles: []
+    imageFiles: [],
+    existingImages: [] // 기존 업로드된 이미지 URLs
   });
   const [dragActive, setDragActive] = useState(false);
   const [selectedEventGallery, setSelectedEventGallery] = useState(null);
@@ -183,12 +184,17 @@ const QLWebsite = () => {
 
   const handleImageFiles = (files) => {
     const imageFiles = files.filter(file => file.type.startsWith('image/'));
-    const remainingSlots = MAX_IMAGES - eventForm.imageFiles.length;
+    const currentTotal = eventForm.existingImages.length + eventForm.imageFiles.length;
+    const remainingSlots = MAX_IMAGES - currentTotal;
     const filesToAdd = imageFiles.slice(0, remainingSlots);
     
     if (filesToAdd.length === 0) {
       alert(`최대 ${MAX_IMAGES}장까지만 업로드할 수 있습니다.`);
       return;
+    }
+
+    if (filesToAdd.length < imageFiles.length) {
+      alert(`${remainingSlots}장만 추가되었습니다. (최대 ${MAX_IMAGES}장)`);
     }
 
     // File 객체 그대로 저장 (base64 변환 없음)
@@ -203,6 +209,42 @@ const QLWebsite = () => {
     setEventForm({ ...eventForm, imageFiles: newFiles });
   };
 
+  // 기존 이미지 삭제 (Supabase Storage + DB)
+  const removeExistingImage = async (imageUrl, index) => {
+    if (!confirm('이 이미지를 삭제하시겠습니까?')) return;
+
+    try {
+      // Storage에서 파일 삭제
+      const path = imageUrl.split('/event-images/')[1];
+      if (path) {
+        const { error: storageError } = await supabase.storage
+          .from('event-images')
+          .remove([path]);
+
+        if (storageError) throw storageError;
+      }
+
+      // DB에서 event_images 레코드 삭제
+      const { error: dbError } = await supabase
+        .from('event_images')
+        .delete()
+        .eq('event_id', editingEvent.id)
+        .eq('image_url', imageUrl);
+
+      if (dbError) throw dbError;
+
+      // state에서 제거
+      const newExistingImages = eventForm.existingImages.filter((_, i) => i !== index);
+      setEventForm({ ...eventForm, existingImages: newExistingImages });
+
+      alert('이미지가 삭제되었습니다.');
+
+    } catch (error) {
+      console.error('Error removing image:', error);
+      alert('이미지 삭제에 실패했습니다: ' + error.message);
+    }
+  };
+
   const openEventForm = (event = null) => {
     if (event) {
       setEditingEvent(event);
@@ -210,11 +252,12 @@ const QLWebsite = () => {
         title: event.title,
         date: event.date,
         description: event.description || '',
-        imageFiles: [] // 기존 이미지는 URL로 표시, 새 이미지만 추가
+        imageFiles: [], // 새로 추가할 이미지
+        existingImages: event.images || [] // 기존 이미지 URLs
       });
     } else {
       setEditingEvent(null);
-      setEventForm({ title: '', date: '', description: '', imageFiles: [] });
+      setEventForm({ title: '', date: '', description: '', imageFiles: [], existingImages: [] });
     }
     setShowEventForm(true);
   };
@@ -303,7 +346,7 @@ const QLWebsite = () => {
       await fetchEvents();
       setShowEventForm(false);
       setEditingEvent(null);
-      setEventForm({ title: '', date: '', description: '', imageFiles: [] });
+      setEventForm({ title: '', date: '', description: '', imageFiles: [], existingImages: [] });
       alert('저장되었습니다!');
 
     } catch (error) {
@@ -484,7 +527,7 @@ const QLWebsite = () => {
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">
-                  사진 ({eventForm.imageFiles.length}/{MAX_IMAGES})
+                  사진 ({eventForm.existingImages.length + eventForm.imageFiles.length}/{MAX_IMAGES})
                 </label>
                 
                 {/* 드래그앤드롭 영역 */}
@@ -499,7 +542,7 @@ const QLWebsite = () => {
                 >
                   <Upload className="w-12 h-12 text-slate-400 mx-auto mb-4" />
                   <p className="text-slate-600 mb-2">여러 사진을 드래그하거나 클릭하여 업로드</p>
-                  <p className="text-sm text-slate-500 mb-4">최대 {MAX_IMAGES}장까지 (현재 {eventForm.imageFiles.length}장)</p>
+                  <p className="text-sm text-slate-500 mb-4">최대 {MAX_IMAGES}장까지 (현재 {eventForm.existingImages.length + eventForm.imageFiles.length}장)</p>
                   <input
                     type="file"
                     accept="image/*"
@@ -517,26 +560,61 @@ const QLWebsite = () => {
                 </div>
 
                 {/* 이미지 미리보기 그리드 */}
-                {eventForm.imageFiles.length > 0 && (
-                  <div className="grid grid-cols-4 gap-3">
-                    {eventForm.imageFiles.map((file, idx) => (
-                      <div key={idx} className="relative group aspect-square">
-                        <img 
-                          src={URL.createObjectURL(file)} 
-                          alt={`Preview ${idx + 1}`} 
-                          className="w-full h-full object-cover rounded-lg" 
-                        />
-                        <button
-                          onClick={() => removeImageFile(idx)}
-                          className="absolute top-1 right-1 p-1.5 bg-red-600 hover:bg-red-700 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                        <div className="absolute bottom-1 left-1 bg-black/70 text-white px-2 py-1 rounded text-xs">
-                          {idx + 1}
+                {(eventForm.existingImages.length > 0 || eventForm.imageFiles.length > 0) && (
+                  <div className="space-y-4">
+                    {/* 기존 이미지 */}
+                    {eventForm.existingImages.length > 0 && (
+                      <div>
+                        <p className="text-sm font-medium text-slate-700 mb-2">기존 이미지 ({eventForm.existingImages.length}장)</p>
+                        <div className="grid grid-cols-4 gap-3">
+                          {eventForm.existingImages.map((url, idx) => (
+                            <div key={`existing-${idx}`} className="relative group aspect-square">
+                              <img 
+                                src={url} 
+                                alt={`Existing ${idx + 1}`} 
+                                className="w-full h-full object-cover rounded-lg" 
+                              />
+                              <button
+                                onClick={() => removeExistingImage(url, idx)}
+                                className="absolute top-1 right-1 p-1.5 bg-red-600 hover:bg-red-700 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                              <div className="absolute bottom-1 left-1 bg-black/70 text-white px-2 py-1 rounded text-xs">
+                                {idx + 1}
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       </div>
-                    ))}
+                    )}
+
+                    {/* 새로 추가할 이미지 */}
+                    {eventForm.imageFiles.length > 0 && (
+                      <div>
+                        <p className="text-sm font-medium text-slate-700 mb-2">새로 추가할 이미지 ({eventForm.imageFiles.length}장)</p>
+                        <div className="grid grid-cols-4 gap-3">
+                          {eventForm.imageFiles.map((file, idx) => (
+                            <div key={`new-${idx}`} className="relative group aspect-square">
+                              <img 
+                                src={URL.createObjectURL(file)} 
+                                alt={`New ${idx + 1}`} 
+                                className="w-full h-full object-cover rounded-lg border-2 border-amber-300" 
+                              />
+                              <button
+                                onClick={() => removeImageFile(idx)}
+                                className="absolute top-1 right-1 p-1.5 bg-red-600 hover:bg-red-700 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                              <div className="absolute bottom-1 left-1 bg-amber-600 text-white px-2 py-1 rounded text-xs font-medium">
+                                NEW {idx + 1}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -567,20 +645,68 @@ const QLWebsite = () => {
         </div>
       )}
 
-      {/* 이미지 갤러리 모달 */}
+      {/* 이벤트 상세보기 모달 - 사이드바 레이아웃 */}
       {selectedEventGallery && (
-        <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4" onClick={() => setSelectedEventGallery(null)}>
-          <div className="max-w-6xl w-full" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-2xl font-light text-white">{selectedEventGallery.title}</h3>
-              <button onClick={() => setSelectedEventGallery(null)} className="p-2 text-white hover:bg-white/10 rounded-lg">
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-[80vh] overflow-y-auto">
-              {selectedEventGallery.images.map((image, idx) => (
-                <img key={idx} src={image} alt={`${selectedEventGallery.title} ${idx + 1}`} className="w-full aspect-square object-cover rounded-lg" />
-              ))}
+        <div className="fixed inset-0 bg-black/90 z-[60] flex items-center justify-center p-4 overflow-y-auto" onClick={() => setSelectedEventGallery(null)}>
+          <div className="max-w-7xl w-full my-8" onClick={(e) => e.stopPropagation()}>
+            {/* 닫기 버튼 - 고정 위치 */}
+            <button 
+              onClick={() => setSelectedEventGallery(null)} 
+              className="fixed top-4 right-4 z-10 p-3 bg-white/20 backdrop-blur-sm text-white hover:bg-white/30 rounded-full transition-colors shadow-lg"
+            >
+              <X className="w-6 h-6" />
+            </button>
+            
+            {/* 사이드바 레이아웃 */}
+            <div className="flex flex-col lg:flex-row gap-6">
+              {/* 왼쪽 정보 사이드바 (데스크톱) / 상단 (모바일) */}
+              <div className="lg:w-80 flex-shrink-0">
+                <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20 sticky top-4">
+                  <h3 className="text-2xl font-semibold text-white mb-4 pr-8">
+                    {selectedEventGallery.title}
+                  </h3>
+                  
+                  <div className="flex items-center space-x-2 text-amber-300 mb-4 pb-4 border-b border-white/10">
+                    <Calendar className="w-5 h-5 flex-shrink-0" />
+                    <span className="text-base">{selectedEventGallery.date}</span>
+                  </div>
+                  
+                  {selectedEventGallery.description && (
+                    <div className="mb-4 pb-4 border-b border-white/10">
+                      <p className="text-white/90 text-sm leading-relaxed whitespace-pre-line">
+                        {selectedEventGallery.description}
+                      </p>
+                    </div>
+                  )}
+
+                  {selectedEventGallery.images && selectedEventGallery.images.length > 0 && (
+                    <div className="flex items-center space-x-2 text-white/60">
+                      <Camera className="w-4 h-4" />
+                      <span className="text-sm">사진 {selectedEventGallery.images.length}장</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* 오른쪽 사진 그리드 */}
+              <div className="flex-1 min-w-0">
+                {selectedEventGallery.images && selectedEventGallery.images.length > 0 && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {selectedEventGallery.images.map((image, idx) => (
+                      <div key={idx} className="relative group aspect-square bg-black/20 rounded-lg overflow-hidden">
+                        <img 
+                          src={image} 
+                          alt={`${selectedEventGallery.title} ${idx + 1}`} 
+                          className="w-full h-full object-cover hover:scale-105 transition-transform duration-300 cursor-pointer" 
+                        />
+                        <div className="absolute bottom-3 right-3 bg-black/70 backdrop-blur-sm text-white px-3 py-1.5 rounded-full text-sm font-medium">
+                          {idx + 1} / {selectedEventGallery.images.length}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
