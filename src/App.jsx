@@ -63,6 +63,8 @@ const QLWebsite = () => {
   const [selectedEventGallery, setSelectedEventGallery] = useState(null);
   const [lightboxIndex, setLightboxIndex] = useState(null);
   const [selectedYear, setSelectedYear] = useState('all');
+  const [expandedGroups, setExpandedGroups] = useState({ leadership: true, staff: true, members: false });
+  const toggleGroup = (group) => setExpandedGroups(prev => ({ ...prev, [group]: !prev[group] }));
 
   const ADMIN_PASSWORD = 'ql2026';
   const MAX_IMAGES = 100;
@@ -1001,42 +1003,69 @@ const QLWebsite = () => {
           </div>
 
           {/* 대표단 */}
-          <div className="mb-16">
-            <div className="flex items-center space-x-3 mb-8">
-              <Star className="w-6 h-6 text-amber-600" />
-              <h4 className="text-3xl font-light text-slate-900">대표단</h4>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-              {LEADERSHIP.map((member, idx) => (
-                <MemberCard key={idx} member={member} />
-              ))}
-            </div>
+          <div className="mb-8">
+            <button
+              onClick={() => toggleGroup('leadership')}
+              className="flex items-center justify-between w-full group mb-6"
+            >
+              <div className="flex items-center space-x-3">
+                <Star className="w-6 h-6 text-amber-600" />
+                <h4 className="text-3xl font-light text-slate-900">대표단</h4>
+                <span className="text-sm text-slate-400 ml-2">{LEADERSHIP.length}명</span>
+              </div>
+              <ChevronLeft className={`w-5 h-5 text-slate-400 transition-transform duration-300 ${expandedGroups.leadership ? '-rotate-90' : 'rotate-180'}`} />
+            </button>
+            {expandedGroups.leadership && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-8">
+                {LEADERSHIP.map((member, idx) => (
+                  <MemberCard key={idx} member={member} />
+                ))}
+              </div>
+            )}
           </div>
 
           {/* 운영진 */}
-          <div className="mb-16">
-            <div className="flex items-center space-x-3 mb-8">
-              <Award className="w-6 h-6 text-blue-600" />
-              <h4 className="text-3xl font-light text-slate-900">운영진</h4>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-              {STAFF.map((member, idx) => (
-                <MemberCard key={idx} member={member} />
-              ))}
-            </div>
+          <div className="mb-8">
+            <button
+              onClick={() => toggleGroup('staff')}
+              className="flex items-center justify-between w-full group mb-6"
+            >
+              <div className="flex items-center space-x-3">
+                <Award className="w-6 h-6 text-blue-600" />
+                <h4 className="text-3xl font-light text-slate-900">운영진</h4>
+                <span className="text-sm text-slate-400 ml-2">{STAFF.length}명</span>
+              </div>
+              <ChevronLeft className={`w-5 h-5 text-slate-400 transition-transform duration-300 ${expandedGroups.staff ? '-rotate-90' : 'rotate-180'}`} />
+            </button>
+            {expandedGroups.staff && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-8">
+                {STAFF.map((member, idx) => (
+                  <MemberCard key={idx} member={member} />
+                ))}
+              </div>
+            )}
           </div>
 
           {/* 회원 */}
           <div>
-            <div className="flex items-center space-x-3 mb-8">
-              <UserCheck className="w-6 h-6 text-emerald-600" />
-              <h4 className="text-3xl font-light text-slate-900">회원</h4>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-              {MEMBERS.map((member, idx) => (
-                <MemberCard key={idx} member={member} />
-              ))}
-            </div>
+            <button
+              onClick={() => toggleGroup('members')}
+              className="flex items-center justify-between w-full group mb-6"
+            >
+              <div className="flex items-center space-x-3">
+                <UserCheck className="w-6 h-6 text-emerald-600" />
+                <h4 className="text-3xl font-light text-slate-900">회원</h4>
+                <span className="text-sm text-slate-400 ml-2">{MEMBERS.length}명</span>
+              </div>
+              <ChevronLeft className={`w-5 h-5 text-slate-400 transition-transform duration-300 ${expandedGroups.members ? '-rotate-90' : 'rotate-180'}`} />
+            </button>
+            {expandedGroups.members && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+                {MEMBERS.map((member, idx) => (
+                  <MemberCard key={idx} member={member} />
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </section>
