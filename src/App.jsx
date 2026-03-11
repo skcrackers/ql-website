@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Menu, X, Calendar, Users, BookOpen, ExternalLink, Mail, Instagram, Linkedin, ChevronRight, Phone, MapPin, Star, Award, UserCheck, Edit3, Plus, Trash2, Save, Lock, Camera, Upload } from 'lucide-react';
+import { Menu, X, Calendar, Users, BookOpen, ExternalLink, Mail, Instagram, Linkedin, ChevronRight, ChevronLeft, Phone, MapPin, Star, Award, UserCheck, Edit3, Plus, Trash2, Save, Lock, Camera, Upload } from 'lucide-react';
 import { supabase } from '../supabase';
 import CalendarSection from './CalendarSection';
 
@@ -61,9 +61,24 @@ const QLWebsite = () => {
   });
   const [dragActive, setDragActive] = useState(false);
   const [selectedEventGallery, setSelectedEventGallery] = useState(null);
+  const [lightboxIndex, setLightboxIndex] = useState(null);
+  const [selectedYear, setSelectedYear] = useState('all');
 
   const ADMIN_PASSWORD = 'ql2026';
   const MAX_IMAGES = 100;
+
+  // 라이트박스 키보드 탐색
+  useEffect(() => {
+    if (lightboxIndex === null || !selectedEventGallery?.images) return;
+    const total = selectedEventGallery.images.length;
+    const handler = (e) => {
+      if (e.key === 'ArrowRight') setLightboxIndex(i => Math.min(i + 1, total - 1));
+      if (e.key === 'ArrowLeft') setLightboxIndex(i => Math.max(i - 1, 0));
+      if (e.key === 'Escape') setLightboxIndex(null);
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [lightboxIndex, selectedEventGallery]);
 
   // 로그인 처리
   const handleLogin = () => {
@@ -342,6 +357,19 @@ const QLWebsite = () => {
 
           if (imagesError) throw imagesError;
         }
+
+        // 캘린더에도 자동 등록
+        await supabase
+          .from('calendar_events')
+          .insert([{
+            title: eventForm.title,
+            date: eventForm.date,
+            time: null,
+            type: '일반',
+            description: eventForm.description,
+            location: '',
+            created_by: 'event-sync'
+          }]);
       }
 
       await fetchEvents();
@@ -651,12 +679,12 @@ const QLWebsite = () => {
       {selectedEventGallery && (
         <div 
           className="fixed inset-0 bg-black/90 z-[60] flex items-start justify-center overflow-y-auto" 
-          onClick={() => setSelectedEventGallery(null)}
+          onClick={() => { setSelectedEventGallery(null); setLightboxIndex(null); }}
         >
           <div className="w-full max-w-7xl p-4 my-8" onClick={(e) => e.stopPropagation()}>
             {/* 닫기 버튼 - 고정 위치 */}
             <button 
-              onClick={() => setSelectedEventGallery(null)} 
+              onClick={() => { setSelectedEventGallery(null); setLightboxIndex(null); }} 
               className="fixed top-4 right-4 z-10 p-3 bg-white/20 backdrop-blur-sm text-white hover:bg-white/30 rounded-full transition-colors shadow-lg"
             >
               <X className="w-6 h-6" />
@@ -696,16 +724,24 @@ const QLWebsite = () => {
               {/* 오른쪽 사진 그리드 */}
               <div className="flex-1 min-w-0">
                 {selectedEventGallery.images && selectedEventGallery.images.length > 0 && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="columns-2 md:columns-3 gap-3 space-y-3">
                     {selectedEventGallery.images.map((image, idx) => (
-                      <div key={idx} className="relative group aspect-square bg-black/20 rounded-lg overflow-hidden">
-                        <img 
-                          src={image} 
-                          alt={`${selectedEventGallery.title} ${idx + 1}`} 
-                          className="w-full h-full object-cover hover:scale-105 transition-transform duration-300 cursor-pointer" 
+                      <div
+                        key={idx}
+                        className="relative break-inside-avoid group cursor-pointer rounded-lg overflow-hidden bg-black/20"
+                        onClick={() => setLightboxIndex(idx)}
+                      >
+                        <img
+                          src={image}
+                          alt={`${selectedEventGallery.title} ${idx + 1}`}
+                          className="w-full h-auto block group-hover:brightness-75 transition-all duration-200"
                         />
-                        <div className="absolute bottom-3 right-3 bg-black/70 backdrop-blur-sm text-white px-3 py-1.5 rounded-full text-sm font-medium">
-                          {idx + 1} / {selectedEventGallery.images.length}
+                        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="bg-black/50 rounded-full p-2">
+                            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+                            </svg>
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -713,6 +749,55 @@ const QLWebsite = () => {
                 )}
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 라이트박스 */}
+      {lightboxIndex !== null && selectedEventGallery?.images && (
+        <div
+          className="fixed inset-0 bg-black z-[80] flex items-center justify-center"
+          onClick={() => setLightboxIndex(null)}
+        >
+          {/* 닫기 */}
+          <button
+            className="fixed top-4 right-4 z-10 p-3 bg-white/20 text-white hover:bg-white/30 rounded-full transition-colors"
+            onClick={() => setLightboxIndex(null)}
+          >
+            <X className="w-6 h-6" />
+          </button>
+
+          {/* 이전 */}
+          {lightboxIndex > 0 && (
+            <button
+              className="fixed left-4 top-1/2 -translate-y-1/2 z-10 p-3 bg-white/20 text-white hover:bg-white/30 rounded-full transition-colors"
+              onClick={(e) => { e.stopPropagation(); setLightboxIndex(i => i - 1); }}
+            >
+              <ChevronLeft className="w-7 h-7" />
+            </button>
+          )}
+
+          {/* 다음 */}
+          {lightboxIndex < selectedEventGallery.images.length - 1 && (
+            <button
+              className="fixed right-4 top-1/2 -translate-y-1/2 z-10 p-3 bg-white/20 text-white hover:bg-white/30 rounded-full transition-colors"
+              onClick={(e) => { e.stopPropagation(); setLightboxIndex(i => i + 1); }}
+            >
+              <ChevronRight className="w-7 h-7" />
+            </button>
+          )}
+
+          {/* 사진 */}
+          <img
+            src={selectedEventGallery.images[lightboxIndex]}
+            alt={`${selectedEventGallery.title} ${lightboxIndex + 1}`}
+            className="max-h-screen max-w-full object-contain px-16"
+            onClick={(e) => e.stopPropagation()}
+          />
+
+          {/* 카운터 */}
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-black/60 text-white px-4 py-2 rounded-full text-sm">
+            {lightboxIndex + 1} / {selectedEventGallery.images.length}
           </div>
         </div>
       )}
@@ -927,6 +1012,34 @@ const QLWebsite = () => {
             <div className="h-1 w-24 bg-amber-600 mx-auto"></div>
           </div>
 
+          {/* 연도 필터 탭 */}
+          {events.length > 0 && (() => {
+            const years = ['all', ...Array.from(new Set(events.map(e => e.date?.slice(0, 4)).filter(Boolean))).sort((a, b) => b - a)];
+            const filtered = selectedYear === 'all' ? events : events.filter(e => e.date?.startsWith(selectedYear));
+            return (
+              <div className="mb-8">
+                <div className="flex flex-wrap gap-2 justify-center mb-2">
+                  {years.map(y => (
+                    <button
+                      key={y}
+                      onClick={() => setSelectedYear(y)}
+                      className={`px-5 py-2 rounded-full text-sm font-medium transition-all ${
+                        selectedYear === y
+                          ? 'bg-amber-600 text-white shadow-md'
+                          : 'bg-white text-slate-600 border border-slate-200 hover:border-amber-400 hover:text-amber-700'
+                      }`}
+                    >
+                      {y === 'all' ? '전체' : `${y}년`}
+                      <span className={`ml-1.5 text-xs ${selectedYear === y ? 'text-amber-200' : 'text-slate-400'}`}>
+                        {y === 'all' ? events.length : events.filter(e => e.date?.startsWith(y)).length}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+
           {/* 편집 모드: 이벤트 추가 버튼 */}
           {editMode && (
             <div className="mb-8 flex justify-end">
@@ -947,7 +1060,7 @@ const QLWebsite = () => {
             </div>
           ) : events.length > 0 ? (
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
-              {events.map((event) => (
+              {(selectedYear === 'all' ? events : events.filter(e => e.date?.startsWith(selectedYear))).map((event) => (
                 <div key={event.id} className="bg-white rounded-2xl overflow-hidden shadow-lg border border-slate-100 hover:shadow-xl transition-all duration-300 group">
                   {event.images && event.images.length > 0 && (
                     <div 
