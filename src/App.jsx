@@ -67,6 +67,26 @@ const QLWebsite = () => {
   const ADMIN_PASSWORD = 'ql2026';
   const MAX_IMAGES = 100;
 
+  // 썸네일 설정
+  const setThumbnail = async (imageRecord) => {
+    if (!selectedEventGallery?.imageRecords) return;
+    const minIndex = Math.min(...selectedEventGallery.imageRecords.map(r => r.order_index));
+    const { error } = await supabase
+      .from('event_images')
+      .update({ order_index: minIndex - 1 })
+      .eq('id', imageRecord.id);
+    if (error) { alert('썸네일 설정 실패: ' + error.message); return; }
+    await fetchEvents();
+    // selectedEventGallery 갱신
+    setSelectedEventGallery(prev => {
+      const updated = [...prev.imageRecords];
+      const idx = updated.findIndex(r => r.id === imageRecord.id);
+      updated[idx] = { ...updated[idx], order_index: minIndex - 1 };
+      updated.sort((a, b) => a.order_index - b.order_index);
+      return { ...prev, images: updated.map(r => r.image_url), imageRecords: updated };
+    });
+  };
+
   // 라이트박스 키보드 탐색
   useEffect(() => {
     if (lightboxIndex === null || !selectedEventGallery?.images) return;
@@ -107,18 +127,19 @@ const QLWebsite = () => {
         eventsData.map(async (event) => {
           const { data: imagesData, error: imagesError } = await supabase
             .from('event_images')
-            .select('image_url, order_index')
+            .select('id, image_url, order_index')
             .eq('event_id', event.id)
             .order('order_index', { ascending: true });
 
           if (imagesError) {
             console.error('Error fetching images:', imagesError);
-            return { ...event, images: [] };
+            return { ...event, images: [], imageRecords: [] };
           }
 
           return {
             ...event,
-            images: imagesData.map(img => img.image_url)
+            images: imagesData.map(img => img.image_url),
+            imageRecords: imagesData
           };
         })
       );
@@ -736,6 +757,13 @@ const QLWebsite = () => {
                           alt={`${selectedEventGallery.title} ${idx + 1}`}
                           className="w-full h-auto block group-hover:brightness-75 transition-all duration-200"
                         />
+                        {/* 썸네일 배지 */}
+                        {idx === 0 && (
+                          <div className="absolute top-2 left-2 bg-amber-500 text-white text-xs px-2 py-0.5 rounded-full font-medium">
+                            썸네일
+                          </div>
+                        )}
+                        {/* 호버 오버레이 */}
                         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                           <div className="bg-black/50 rounded-full p-2">
                             <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -743,6 +771,15 @@ const QLWebsite = () => {
                             </svg>
                           </div>
                         </div>
+                        {/* 썸네일 설정 버튼 (편집 모드 + 첫번째 아닌 사진) */}
+                        {editMode && idx !== 0 && selectedEventGallery.imageRecords && (
+                          <button
+                            className="absolute top-2 left-2 bg-black/60 hover:bg-amber-500 text-white text-xs px-2 py-1 rounded-full opacity-0 group-hover:opacity-100 transition-all"
+                            onClick={(e) => { e.stopPropagation(); setThumbnail(selectedEventGallery.imageRecords[idx]); }}
+                          >
+                            썸네일 설정
+                          </button>
+                        )}
                       </div>
                     ))}
                   </div>

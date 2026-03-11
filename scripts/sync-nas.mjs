@@ -50,9 +50,19 @@ const supabase = createClient(
 
 // ─── 유틸 ──────────────────────────────────────────────────────────────────
 function parseAlbumName(name) {
-  const match = name.match(/^(\d{4}-\d{2}-\d{2})\s+(.+)$/);
-  if (!match) return null;
-  return { date: match[1], title: match[2].trim() };
+  // YYYY-MM-DD 이벤트명
+  const fullMatch = name.match(/^(\d{4}-\d{2}-\d{2})\s+(.+)$/);
+  if (fullMatch) return { date: fullMatch[1], title: fullMatch[2].trim() };
+
+  // YYYY-MM 이벤트명 (일자 없는 경우 → 01일로 처리)
+  const monthMatch = name.match(/^(\d{4}-\d{2})\s+(.+)$/);
+  if (monthMatch) return { date: `${monthMatch[1]}-01`, title: monthMatch[2].trim() };
+
+  // YYYY-MM (제목 없는 경우 → 연월을 제목으로)
+  const bareMatch = name.match(/^(\d{4}-\d{2})$/);
+  if (bareMatch) return { date: `${bareMatch[1]}-01`, title: name };
+
+  return null;
 }
 
 function isDir(p) {
