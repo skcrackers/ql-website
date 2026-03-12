@@ -41,10 +41,11 @@ const isVideoUrl = (url) => /\.(mp4|webm|mov|avi|mkv)(\?|%3F|$)/i.test(url || ''
 function ImgWithRetry({ src, alt, className, loading }) {
   const [retry, setRetry] = useState(0);
   const handleError = () => {
-    if (retry < 2) setTimeout(() => setRetry(r => r + 1), 1000 * (retry + 1));
+    if (retry < 3) setTimeout(() => setRetry(r => r + 1), [1500, 3500, 7000][retry]);
   };
+  const url = retry > 0 ? `${src}${src.includes('?') ? '&' : '?'}r=${retry}` : src;
   return (
-    <img key={retry} src={src} alt={alt} className={className} loading={loading}
+    <img key={retry} src={url} alt={alt} className={className} loading={loading}
       onError={handleError} />
   );
 }
