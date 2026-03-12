@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar as CalendarIcon, Plus, X, MapPin, Clock, ChevronLeft, ChevronRight, Edit3, Trash2, MessageSquare, Share2 } from 'lucide-react';
+import { Calendar as CalendarIcon, Plus, X, MapPin, Clock, ChevronLeft, ChevronRight, Edit3, Trash2, MessageSquare, Share2, Monitor, Check, Circle } from 'lucide-react';
 import { supabase } from '../supabase';
 
 const CalendarSection = ({ editMode = false, memberNames = [] }) => {
@@ -24,6 +24,7 @@ const CalendarSection = ({ editMode = false, memberNames = [] }) => {
   const [updates, setUpdates] = useState([]);
   const [updateForm, setUpdateForm] = useState({ author_name: '', content: '', optional_link: '', custom_name: '' });
   const [savingUpdate, setSavingUpdate] = useState(false);
+  const [showViewMode, setShowViewMode] = useState(false);
 
   // 이벤트 불러오기
   const fetchEvents = async () => {
@@ -48,12 +49,13 @@ const CalendarSection = ({ editMode = false, memberNames = [] }) => {
     fetchEvents();
   }, []);
 
-  // URL 딥링크: #calendar?meeting=2025-03-25 로 들어오면 해당 날짜의 근황토크 일정 모달 자동 오픈
+  // URL 딥링크: #calendar?meeting=2025-03-25 (또는 &view=1 붙이면 View 모드)
   useEffect(() => {
     const hash = window.location.hash || '';
     const queryPart = hash.includes('?') ? hash.split('?')[1] : '';
     const params = new URLSearchParams(queryPart || window.location.search);
     const meetingDate = params.get('meeting');
+    const wantView = params.get('view') === '1';
     if (!meetingDate || events.length === 0) return;
     const event = events.find(e => e.date === meetingDate && e.type === '근황토크');
     if (event) {
@@ -62,7 +64,10 @@ const CalendarSection = ({ editMode = false, memberNames = [] }) => {
       setShowUpdatesModal(true);
       supabase.from('monthly_updates').select('*').eq('meeting_date', event.date)
         .order('created_at', { ascending: true })
-        .then(({ data }) => setUpdates(data || []));
+        .then(({ data }) => {
+          setUpdates(data || []);
+          if (wantView) setShowViewMode(true);
+        });
       const cleanHash = window.location.hash.split('?')[0] || '';
       window.history.replaceState({}, '', window.location.pathname + (cleanHash || '#calendar'));
     }
@@ -95,6 +100,7 @@ const CalendarSection = ({ editMode = false, memberNames = [] }) => {
     setShowUpdatesModal(false);
     setSelectedEventForUpdates(null);
     setUpdates([]);
+    setShowViewMode(false);
   };
 
   const saveUpdate = async () => {
@@ -134,9 +140,11 @@ const CalendarSection = ({ editMode = false, memberNames = [] }) => {
   };
 
   // 카카오톡 공유용 링크 (특정 모임 근황 페이지 - 딥링크)
-  const getMeetingShareUrl = (event) => {
+  const getMeetingShareUrl = (event, forView = false) => {
     const base = window.location.origin + window.location.pathname;
-    return `${base}#calendar?meeting=${event.date}`;
+    return forView
+      ? `${base}#calendar?meeting=${event.date}&view=1`
+      : `${base}#calendar?meeting=${event.date}`;
   };
 
   // 이벤트 저장
@@ -780,25 +788,69 @@ const CalendarSection = ({ editMode = false, memberNames = [] }) => {
                 </div>
               </div>
 
-              {/* 딥링크 공유 영역 */}
-              <div className="mx-6 mb-0 p-4 bg-slate-50 rounded-xl border border-slate-200">
-                <p className="text-xs text-slate-500 mb-2">카카오톡 등으로 공유할 링크</p>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    readOnly
-                    value={getMeetingShareUrl(selectedEventForUpdates)}
-                    className="flex-1 px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg text-slate-600 truncate"
-                  />
+              {/* 딥링크 공유 영역 + 작성 현황 */}
+              <div className="mx-6 mb-0 p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-4">
+                <div>
+                  <p className="text-xs text-slate-500 mb-2">카카오톡 등으로 공유할 링크</p>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      readOnly
+                      value={getMeetingShareUrl(selectedEventForUpdates)}
+                      className="flex-1 px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg text-slate-600 truncate"
+                    />
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(getMeetingShareUrl(selectedEventForUpdates));
+                        alert('링크가 복사되었습니다. 카카오톡으로 공유해보세요!');
+                      }}
+                      className="flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-sm font-medium shrink-0"
+                    >
+                      <Share2 className="w-4 h-4" />
+                      링크 복사
+                    </button>
+                  </div>
+                </div>
+                {/* 작성 현황: 완료 / 미완료 */}
+                <div className="pt-3 border-t border-slate-200">
+                  <p className="text-xs text-slate-500 mb-2">작성 현황 ({updates.length}명 / {memberNames.length}명)</p>
+                  <div className="flex flex-wrap gap-4 text-sm">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span className="text-slate-600 font-medium">완료:</span>
+                      <span className="text-slate-700">
+                        {updates.length === 0 ? '없음' : updates.map(u => u.author_name).join(', ')}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <Circle className="w-4 h-4 text-slate-400 shrink-0" />
+                      <span className="text-slate-600 font-medium">미완료:</span>
+                      <span className="text-slate-600">
+                        {memberNames.filter(n => !updates.some(u => u.author_name === n)).length === 0
+                          ? '없음'
+                          : memberNames.filter(n => !updates.some(u => u.author_name === n)).join(', ')}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                {/* View 모드 버튼 */}
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => setShowViewMode(true)}
+                    className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white rounded-lg text-sm font-medium"
+                  >
+                    <Monitor className="w-4 h-4" />
+                    전체 보기 (모임용)
+                  </button>
                   <button
                     onClick={() => {
-                      navigator.clipboard.writeText(getMeetingShareUrl(selectedEventForUpdates));
-                      alert('링크가 복사되었습니다. 카카오톡으로 공유해보세요!');
+                      navigator.clipboard.writeText(getMeetingShareUrl(selectedEventForUpdates, true));
+                      alert('View 링크가 복사되었습니다. 모임 때 프로젝터/화면 공유용으로 사용하세요!');
                     }}
-                    className="flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-sm font-medium shrink-0"
+                    className="flex items-center gap-2 px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-lg text-sm font-medium"
                   >
                     <Share2 className="w-4 h-4" />
-                    링크 복사
+                    View 링크 복사
                   </button>
                 </div>
               </div>
@@ -898,6 +950,55 @@ const CalendarSection = ({ editMode = false, memberNames = [] }) => {
                   )}
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* View 모드 - 오프라인 모임용 전체 보기 (풀스크린) */}
+        {showViewMode && selectedEventForUpdates && (
+          <div className="fixed inset-0 z-[60] bg-slate-900 flex flex-col">
+            <div className="flex items-center justify-between p-4 bg-slate-800 text-white shrink-0">
+              <h2 className="text-xl font-medium">
+                {selectedEventForUpdates.title} — 근황 전체 보기
+              </h2>
+              <button
+                onClick={() => setShowViewMode(false)}
+                className="p-2 hover:bg-slate-700 rounded-lg"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-8 max-w-4xl mx-auto w-full">
+              {updates.length === 0 ? (
+                <p className="text-slate-400 text-center py-20">아직 작성된 근황이 없습니다.</p>
+              ) : (
+                <div className="space-y-8">
+                  {updates.map((u, idx) => (
+                    <div
+                      key={u.id}
+                      className="bg-slate-800 rounded-2xl p-8 border border-slate-700"
+                    >
+                      <div className="flex items-center gap-3 mb-4">
+                        <span className="text-2xl font-bold text-amber-400">{idx + 1}</span>
+                        <h3 className="text-2xl font-semibold text-white">{u.author_name}</h3>
+                      </div>
+                      <p className="text-lg text-slate-200 whitespace-pre-line leading-relaxed">
+                        {u.content}
+                      </p>
+                      {u.optional_link && (
+                        <a
+                          href={u.optional_link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-amber-400 hover:text-amber-300 text-base mt-3 inline-block"
+                        >
+                          링크 열기 →
+                        </a>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}
