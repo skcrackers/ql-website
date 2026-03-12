@@ -3,7 +3,7 @@ import { Menu, X, Calendar, Users, BookOpen, ExternalLink, Mail, Instagram, Link
 import { supabase } from '../supabase';
 import CalendarSection from './CalendarSection';
 
-const CHUNK_SIZE = 4 * 1024 * 1024; // Vercel 4.5MB 제한보다 작게
+const CHUNK_SIZE = 3 * 1024 * 1024; // Vercel 4.5MB 제한 (멀티파트 오버헤드 고려)
 
 // 멤버 데이터 (CSV 2026-02-12 기준)
 const LEADERSHIP = [
@@ -225,20 +225,9 @@ const QLWebsite = () => {
       if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) continue;
 
       try {
-        if (file.size <= CHUNK_SIZE) {
-          const formData = new FormData();
-          formData.append('file', file);
-          formData.append('date', date);
-          formData.append('title', title);
-          formData.append('index', String(i));
-          const res = await fetch('/api/upload-to-nas', { method: 'POST', body: formData });
-          const data = await res.json().catch(() => ({}));
-          if (data.url) uploadedUrls.push(data.url);
-          else throw new Error(data.error || `HTTP ${res.status}`);
-        } else {
+        const tryChunked = async () => {
           const uploadId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
           const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
-
           for (let ci = 0; ci < totalChunks; ci++) {
             const start = ci * CHUNK_SIZE;
             const chunkBlob = file.slice(start, Math.min(start + CHUNK_SIZE, file.size));
@@ -251,13 +240,36 @@ const QLWebsite = () => {
             formData.append('title', title);
             formData.append('index', String(i));
             formData.append('filename', file.name);
-
             const res = await fetch('/api/upload-chunk', { method: 'POST', body: formData });
             const data = await res.json().catch(() => ({}));
             if (data.error) throw new Error(data.error);
-            if (data.url) uploadedUrls.push(data.url);
+            if (data.url) return data.url;
             advance();
           }
+          return null;
+        };
+
+        if (file.size <= CHUNK_SIZE) {
+          const formData = new FormData();
+          formData.append('file', file);
+          formData.append('date', date);
+          formData.append('title', title);
+          formData.append('index', String(i));
+          const res = await fetch('/api/upload-to-nas', { method: 'POST', body: formData });
+          const data = await res.json().catch(() => ({}));
+          if (data.url) {
+            uploadedUrls.push(data.url);
+          } else if (res.status === 413) {
+            const url = await tryChunked();
+            if (url) uploadedUrls.push(url);
+            else throw new Error('업로드 실패');
+          } else {
+            throw new Error(data.error || `HTTP ${res.status}`);
+          }
+        } else {
+          const url = await tryChunked();
+          if (url) uploadedUrls.push(url);
+          else throw new Error('업로드 실패');
         }
         if (file.size <= CHUNK_SIZE) advance();
       } catch (err) {
