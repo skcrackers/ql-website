@@ -1383,7 +1383,10 @@ const QLWebsite = () => {
       </section>
 
       {/* Calendar Section */}
-      <CalendarSection editMode={editMode} />
+      <CalendarSection
+        editMode={editMode}
+        memberNames={[...LEADERSHIP, ...STAFF, ...MEMBERS].map((m) => m.name).sort()}
+      />
 
       {/* Members Section */}
       <section id="members" className="py-20 px-4">

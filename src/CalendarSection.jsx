@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar as CalendarIcon, Plus, X, MapPin, Clock, ChevronLeft, ChevronRight, Edit3, Trash2 } from 'lucide-react';
+import { Calendar as CalendarIcon, Plus, X, MapPin, Clock, ChevronLeft, ChevronRight, Edit3, Trash2, MessageSquare, Share2 } from 'lucide-react';
 import { supabase } from '../supabase';
 
-const CalendarSection = ({ editMode = false }) => {
+const CalendarSection = ({ editMode = false, memberNames = [] }) => {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(false);
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -17,6 +17,13 @@ const CalendarSection = ({ editMode = false }) => {
     location: '',
     created_by: ''
   });
+
+  // 근황토크
+  const [showUpdatesModal, setShowUpdatesModal] = useState(false);
+  const [selectedEventForUpdates, setSelectedEventForUpdates] = useState(null);
+  const [updates, setUpdates] = useState([]);
+  const [updateForm, setUpdateForm] = useState({ author_name: '', content: '', optional_link: '', custom_name: '' });
+  const [savingUpdate, setSavingUpdate] = useState(false);
 
   // 이벤트 불러오기
   const fetchEvents = async () => {
@@ -40,6 +47,97 @@ const CalendarSection = ({ editMode = false }) => {
   useEffect(() => {
     fetchEvents();
   }, []);
+
+  // URL 딥링크: #calendar?meeting=2025-03-25 로 들어오면 해당 날짜의 근황토크 일정 모달 자동 오픈
+  useEffect(() => {
+    const hash = window.location.hash || '';
+    const queryPart = hash.includes('?') ? hash.split('?')[1] : '';
+    const params = new URLSearchParams(queryPart || window.location.search);
+    const meetingDate = params.get('meeting');
+    if (!meetingDate || events.length === 0) return;
+    const event = events.find(e => e.date === meetingDate && e.type === '근황토크');
+    if (event) {
+      setSelectedEventForUpdates(event);
+      setUpdateForm({ author_name: '', content: '', optional_link: '', custom_name: '' });
+      setShowUpdatesModal(true);
+      supabase.from('monthly_updates').select('*').eq('meeting_date', event.date)
+        .order('created_at', { ascending: true })
+        .then(({ data }) => setUpdates(data || []));
+      const cleanHash = window.location.hash.split('?')[0] || '';
+      window.history.replaceState({}, '', window.location.pathname + (cleanHash || '#calendar'));
+    }
+  }, [events]);
+
+  // 근황 불러오기
+  const fetchUpdates = async (meetingDate) => {
+    try {
+      const { data, error } = await supabase
+        .from('monthly_updates')
+        .select('*')
+        .eq('meeting_date', meetingDate)
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      setUpdates(data || []);
+    } catch (err) {
+      console.error('Error fetching updates:', err);
+      setUpdates([]);
+    }
+  };
+
+  const openUpdatesModal = (event) => {
+    setSelectedEventForUpdates(event);
+    setUpdateForm({ author_name: '', content: '', optional_link: '', custom_name: '' });
+    setShowUpdatesModal(true);
+    fetchUpdates(event.date);
+  };
+
+  const closeUpdatesModal = () => {
+    setShowUpdatesModal(false);
+    setSelectedEventForUpdates(null);
+    setUpdates([]);
+  };
+
+  const saveUpdate = async () => {
+    const name = updateForm.author_name === '__custom__'
+      ? updateForm.custom_name.trim()
+      : updateForm.author_name.trim();
+    if (!name || !updateForm.content.trim()) {
+      alert('이름과 근황을 입력해주세요.');
+      return;
+    }
+    if (!selectedEventForUpdates) return;
+
+    setSavingUpdate(true);
+    try {
+      const { error } = await supabase
+        .from('monthly_updates')
+        .upsert({
+          meeting_date: selectedEventForUpdates.date,
+          author_name: name,
+          content: updateForm.content.trim(),
+          optional_link: updateForm.optional_link.trim() || null,
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'meeting_date,author_name'
+        });
+
+      if (error) throw error;
+      await fetchUpdates(selectedEventForUpdates.date);
+      setUpdateForm({ author_name: '', content: '', optional_link: '', custom_name: '' });
+      alert('저장되었습니다!');
+    } catch (err) {
+      console.error('Save update error:', err);
+      alert('저장에 실패했습니다: ' + err.message);
+    } finally {
+      setSavingUpdate(false);
+    }
+  };
+
+  // 카카오톡 공유용 링크 (특정 모임 근황 페이지 - 딥링크)
+  const getMeetingShareUrl = (event) => {
+    const base = window.location.origin + window.location.pathname;
+    return `${base}#calendar?meeting=${event.date}`;
+  };
 
   // 이벤트 저장
   const saveEvent = async () => {
@@ -156,6 +254,7 @@ const CalendarSection = ({ editMode = false }) => {
     switch (type) {
       case '운영': return 'bg-blue-500';
       case '공지': return 'bg-amber-500';
+      case '근황토크': return 'bg-emerald-500';
       case '일반': return 'bg-slate-400';
       default: return 'bg-slate-400';
     }
@@ -165,10 +264,13 @@ const CalendarSection = ({ editMode = false }) => {
     switch (type) {
       case '운영': return 'bg-blue-100 text-blue-800';
       case '공지': return 'bg-amber-100 text-amber-800';
+      case '근황토크': return 'bg-emerald-100 text-emerald-800';
       case '일반': return 'bg-slate-100 text-slate-800';
       default: return 'bg-slate-100 text-slate-800';
     }
   };
+
+  const isUpdatesEvent = (event) => event?.type === '근황토크';
 
   // 캘린더 헬퍼 함수
   const getDaysInMonth = (date) => {
@@ -247,12 +349,28 @@ const CalendarSection = ({ editMode = false }) => {
             {dayEvents.slice(0, 3).map((event, idx) => (
               <div
                 key={event.id}
-                className="group cursor-pointer"
-                onClick={() => openEventForm(event)}
+                className="group cursor-pointer flex items-center gap-1"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (isUpdatesEvent(event)) {
+                    openUpdatesModal(event);
+                  } else {
+                    openEventForm(event);
+                  }
+                }}
               >
-                <div className={`text-xs px-2 py-1 rounded truncate ${getTypeBadgeColor(event.type)} hover:opacity-80`}>
+                <div className={`flex-1 text-xs px-2 py-1 rounded truncate ${getTypeBadgeColor(event.type)} hover:opacity-80`}>
                   {event.title}
                 </div>
+                {editMode && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); openEventForm(event); }}
+                    className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-slate-200 rounded"
+                    title="일정 수정"
+                  >
+                    <Edit3 className="w-3 h-3" />
+                  </button>
+                )}
               </div>
             ))}
             {dayEvents.length > 3 && (
@@ -345,6 +463,17 @@ const CalendarSection = ({ editMode = false }) => {
               <p className="text-sm text-slate-700 mt-2 whitespace-pre-line">
                 {event.description}
               </p>
+            )}
+
+            {/* 근황토크일 때만 근황 보기/쓰기 버튼 (모바일) */}
+            {isUpdatesEvent(event) && (
+              <button
+                onClick={() => openUpdatesModal(event)}
+                className="mt-3 flex items-center gap-2 text-emerald-600 hover:text-emerald-700 font-medium text-sm"
+              >
+                <MessageSquare className="w-4 h-4" />
+                근황 보기/쓰기
+              </button>
             )}
           </div>
         ))}
@@ -496,17 +625,19 @@ const CalendarSection = ({ editMode = false }) => {
                   <label className="block text-sm font-medium text-slate-700 mb-2">
                     타입 *
                   </label>
-                  <div className="flex space-x-3">
-                    {['운영', '공지', '일반'].map(type => (
+                    <div className="flex flex-wrap gap-2">
+                      {['운영', '공지', '일반', '근황토크'].map(type => (
                       <button
                         key={type}
                         onClick={() => setEventForm({ ...eventForm, type })}
                         className={`flex-1 py-3 px-4 rounded-lg border-2 transition-all ${
                           eventForm.type === type
-                            ? type === '운영' 
+                            ? type === '운영'
                               ? 'border-blue-500 bg-blue-50 text-blue-700'
                               : type === '공지'
                               ? 'border-amber-500 bg-amber-50 text-amber-700'
+                              : type === '근황토크'
+                              ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
                               : 'border-slate-500 bg-slate-50 text-slate-700'
                             : 'border-slate-200 hover:border-slate-300'
                         }`}
@@ -584,6 +715,165 @@ const CalendarSection = ({ editMode = false }) => {
                 >
                   취소
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 근황토크 모달 */}
+        {showUpdatesModal && selectedEventForUpdates && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+            <div className="bg-white rounded-2xl max-w-2xl w-full my-8 shadow-2xl max-h-[90vh] flex flex-col">
+              <div className="p-6 border-b border-slate-200 flex-shrink-0">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h3 className="text-xl font-medium text-slate-900">
+                      {selectedEventForUpdates.title} — 근황
+                    </h3>
+                    <p className="text-sm text-slate-500 mt-1">
+                      {formatDate(selectedEventForUpdates.date)}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {editMode && (
+                      <button
+                        onClick={() => {
+                          closeUpdatesModal();
+                          openEventForm(selectedEventForUpdates);
+                        }}
+                        className="p-2 text-amber-600 hover:bg-amber-50 rounded-lg"
+                        title="일정 수정"
+                      >
+                        <Edit3 className="w-5 h-5" />
+                      </button>
+                    )}
+                    <button
+                      onClick={closeUpdatesModal}
+                      className="p-2 hover:bg-slate-100 rounded-lg"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* 딥링크 공유 영역 */}
+              <div className="mx-6 mb-0 p-4 bg-slate-50 rounded-xl border border-slate-200">
+                <p className="text-xs text-slate-500 mb-2">카카오톡 등으로 공유할 링크</p>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value={getMeetingShareUrl(selectedEventForUpdates)}
+                    className="flex-1 px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg text-slate-600 truncate"
+                  />
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(getMeetingShareUrl(selectedEventForUpdates));
+                      alert('링크가 복사되었습니다. 카카오톡으로 공유해보세요!');
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-sm font-medium shrink-0"
+                  >
+                    <Share2 className="w-4 h-4" />
+                    링크 복사
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-6 overflow-y-auto flex-1 min-h-0">
+                {/* 작성 폼 */}
+                <div className="mb-6 p-4 bg-amber-50 rounded-xl border border-amber-200">
+                  <h4 className="font-medium text-slate-800 mb-3">근황 작성</h4>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-sm text-slate-600 mb-1">이름 *</label>
+                      <select
+                        value={updateForm.author_name}
+                        onChange={(e) => setUpdateForm({ ...updateForm, author_name: e.target.value })}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                      >
+                        <option value="">선택하세요</option>
+                        {memberNames.map((name) => (
+                          <option key={name} value={name}>{name}</option>
+                        ))}
+                        <option value="__custom__">── 직접 입력 ──</option>
+                      </select>
+                      {updateForm.author_name === '__custom__' && (
+                        <input
+                          type="text"
+                          value={updateForm.custom_name}
+                          onChange={(e) => setUpdateForm({ ...updateForm, custom_name: e.target.value })}
+                          placeholder="이름을 입력하세요"
+                          className="mt-2 w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                        />
+                      )}
+                    </div>
+                    <div>
+                      <label className="block text-sm text-slate-600 mb-1">근황 *</label>
+                      <textarea
+                        value={updateForm.content}
+                        onChange={(e) => setUpdateForm({ ...updateForm, content: e.target.value })}
+                        placeholder="이번 달 근황을 간단히 적어주세요"
+                        rows={3}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-slate-600 mb-1">링크 (선택)</label>
+                      <input
+                        type="url"
+                        value={updateForm.optional_link}
+                        onChange={(e) => setUpdateForm({ ...updateForm, optional_link: e.target.value })}
+                        placeholder="https://..."
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                      />
+                    </div>
+                    <button
+                      onClick={saveUpdate}
+                      disabled={savingUpdate}
+                      className="w-full py-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-lg font-medium"
+                    >
+                      {savingUpdate ? '저장 중...' : '저장'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* 작성된 근황 목록 */}
+                <div>
+                  <h4 className="font-medium text-slate-800 mb-3">
+                    작성된 근황 ({updates.length}명)
+                  </h4>
+                  {updates.length === 0 ? (
+                    <p className="text-slate-500 text-sm">아직 작성된 근황이 없습니다.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {updates.map((u) => (
+                        <div
+                          key={u.id}
+                          className="p-4 bg-slate-50 rounded-lg border border-slate-100"
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="font-medium text-slate-900">{u.author_name}</span>
+                            <span className="text-xs text-slate-400">
+                              {new Date(u.created_at).toLocaleDateString('ko-KR')}
+                            </span>
+                          </div>
+                          <p className="text-sm text-slate-700 whitespace-pre-line">{u.content}</p>
+                          {u.optional_link && (
+                            <a
+                              href={u.optional_link}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-amber-600 hover:underline mt-2 inline-block"
+                            >
+                              링크 열기 →
+                            </a>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
