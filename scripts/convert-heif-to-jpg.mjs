@@ -14,6 +14,8 @@ import { createClient } from '@supabase/supabase-js';
 import { createClient as createWebdavClient } from 'webdav';
 import { readFileSync } from 'fs';
 import convert from 'heic-convert';
+import jpegJs from 'jpeg-js';
+import { PNG } from 'pngjs';
 
 const PUBLIC_BASE = 'https://media.skcrackers.co.kr/ql/events';
 const WEBDAV_BASE = 'web/ql/events';
@@ -88,6 +90,7 @@ async function main() {
 
   let ok = 0;
   let fail = 0;
+  let skip = 0;
 
   for (const img of heifImages) {
     const paths = parseUrlToPaths(img.image_url);
@@ -108,12 +111,37 @@ async function main() {
       if (!res.ok) throw new Error(`다운로드 실패: ${res.status}`);
       const heicBuffer = Buffer.from(await res.arrayBuffer());
 
-      const jpegResult = await convert({
-        buffer: heicBuffer,
-        format: 'JPEG',
-        quality: 0.92,
-      });
-      const jpegBuffer = Buffer.isBuffer(jpegResult) ? jpegResult : Buffer.from(jpegResult);
+      let jpegBuffer;
+      try {
+        const jpegResult = await convert({
+          buffer: heicBuffer,
+          format: 'JPEG',
+          quality: 0.92,
+        });
+        jpegBuffer = Buffer.isBuffer(jpegResult) ? jpegResult : Buffer.from(jpegResult);
+      } catch (convertErr) {
+        if (!convertErr.message?.includes('not a HEIC image')) throw convertErr;
+
+        if (heicBuffer[0] === 0xff && heicBuffer[1] === 0xd8) {
+          jpegBuffer = heicBuffer;
+        } else if (heicBuffer[0] === 0x89 && heicBuffer[1] === 0x50 && heicBuffer[2] === 0x4e && heicBuffer[3] === 0x47) {
+          const pngData = PNG.sync.read(heicBuffer);
+          const encoded = jpegJs.encode(
+            { data: pngData.data, width: pngData.width, height: pngData.height },
+            92
+          );
+          jpegBuffer = Buffer.from(encoded.data);
+        } else {
+          try {
+            jpegJs.decode(heicBuffer);
+            jpegBuffer = heicBuffer;
+          } catch {
+            skip++;
+            console.log(`  ⏭️ 건너뜀 (id: ${img.id}, ${filename}): HEIC/JPEG/PNG 형식 아님`);
+            continue;
+          }
+        }
+      }
 
       const dirPath = `${WEBDAV_BASE}/${year}/${folderName}`;
       await webdav.createDirectory(dirPath, { recursive: true });
@@ -142,7 +170,7 @@ async function main() {
     }
   }
 
-  console.log(`\n✨ 완료! 성공 ${ok}개, 실패 ${fail}개\n`);
+  console.log(`\n✨ 완료! 성공 ${ok}개, 실패 ${fail}개${skip > 0 ? `, 건너뜀 ${skip}개` : ''}\n`);
 }
 
 main().catch((err) => {
