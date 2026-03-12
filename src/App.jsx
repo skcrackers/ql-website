@@ -795,6 +795,7 @@ const QLWebsite = () => {
                         <img
                           src={image}
                           alt={`${selectedEventGallery.title} ${idx + 1}`}
+                          loading="lazy"
                           className="w-full h-auto block group-hover:brightness-75 transition-all duration-200"
                         />
                         {/* 썸네일 배지 */}
@@ -1171,7 +1172,7 @@ const QLWebsite = () => {
                       className="aspect-video bg-slate-200 overflow-hidden cursor-pointer relative"
                       onClick={() => setSelectedEventGallery(event)}
                     >
-                      <img src={event.images[0]} alt={event.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
+                      <img src={event.images[0]} alt={event.title} loading="lazy" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
                       {event.images.length > 1 && (
                         <div className="absolute bottom-3 right-3 bg-black/70 text-white px-3 py-1 rounded-full text-sm flex items-center space-x-1">
                           <Camera className="w-4 h-4" />
