@@ -189,6 +189,8 @@ const QLWebsite = () => {
   };
 
   useEffect(() => {
+    window.scrollTo(0, 0);
+
     const handleScroll = () => {
       setScrolled(window.scrollY > 50);
     };
@@ -202,9 +204,6 @@ const QLWebsite = () => {
 
     // Supabase에서 이벤트 불러오기
     fetchEvents();
-
-    // 초기 섹션(members)으로 스크롤
-    requestAnimationFrame(() => document.getElementById('members')?.scrollIntoView({ behavior: 'smooth' }));
 
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
@@ -232,10 +231,14 @@ const QLWebsite = () => {
       formData.append('index', String(i));
 
       try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 60000);
         const res = await fetch(apiUrl, {
           method: 'POST',
           body: formData,
+          signal: controller.signal,
         });
+        clearTimeout(timeoutId);
         let data;
         try {
           data = await res.json();
@@ -417,6 +420,11 @@ const QLWebsite = () => {
             .insert(imageRecords);
 
           if (imagesError) throw imagesError;
+
+          const { count } = await supabase.from('event_images').select('*', { count: 'exact', head: true }).eq('event_id', editingEvent.id);
+          if (count < (eventForm.existingImages?.length || 0) + imageRecords.length) {
+            throw new Error('이미지 저장 확인 실패. 잠시 후 다시 시도해주세요.');
+          }
         }
 
       } else {
@@ -454,6 +462,11 @@ const QLWebsite = () => {
             .insert(imageRecords);
 
           if (imagesError) throw imagesError;
+
+          const { count } = await supabase.from('event_images').select('*', { count: 'exact', head: true }).eq('event_id', newEvent.id);
+          if (count < imageRecords.length) {
+            throw new Error('이미지 저장 확인 실패. 잠시 후 다시 시도해주세요.');
+          }
         }
 
         // 캘린더에도 자동 등록
