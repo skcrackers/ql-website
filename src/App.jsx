@@ -65,6 +65,7 @@ const QLWebsite = () => {
   const [selectedYear, setSelectedYear] = useState('all');
   const [expandedGroups, setExpandedGroups] = useState({ leadership: true, staff: true, members: false });
   const toggleGroup = (group) => setExpandedGroups(prev => ({ ...prev, [group]: !prev[group] }));
+  const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
 
   const ADMIN_PASSWORD = 'ql2026';
   const MAX_IMAGES = 100;
@@ -176,6 +177,7 @@ const QLWebsite = () => {
   // 🔥 이미지 업로드 (Supabase Storage)
   const uploadImages = async (files, eventId) => {
     const uploadedUrls = [];
+    setUploadProgress({ current: 0, total: files.length });
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
@@ -188,6 +190,7 @@ const QLWebsite = () => {
 
       if (error) {
         console.error('Upload error:', error);
+        setUploadProgress(p => ({ ...p, current: i + 1 }));
         continue;
       }
 
@@ -196,8 +199,10 @@ const QLWebsite = () => {
         .getPublicUrl(fileName);
 
       uploadedUrls.push(publicUrl);
+      setUploadProgress({ current: i + 1, total: files.length });
     }
 
+    setUploadProgress({ current: 0, total: 0 });
     return uploadedUrls;
   };
 
@@ -620,24 +625,41 @@ const QLWebsite = () => {
                       <div>
                         <p className="text-sm font-medium text-slate-700 mb-2">기존 이미지 ({eventForm.existingImages.length}장)</p>
                         <div className="grid grid-cols-4 gap-3">
-                          {eventForm.existingImages.map((url, idx) => (
-                            <div key={`existing-${idx}`} className="relative group aspect-square">
-                              <img 
-                                src={url} 
-                                alt={`Existing ${idx + 1}`} 
-                                className="w-full h-full object-cover rounded-lg" 
-                              />
-                              <button
-                                onClick={() => removeExistingImage(url, idx)}
-                                className="absolute top-1 right-1 p-1.5 bg-red-600 hover:bg-red-700 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                              >
-                                <X className="w-4 h-4" />
-                              </button>
-                              <div className="absolute bottom-1 left-1 bg-black/70 text-white px-2 py-1 rounded text-xs">
-                                {idx + 1}
+                          {eventForm.existingImages.map((url, idx) => {
+                            const record = editingEvent?.imageRecords?.find(r => r.image_url === url);
+                            const isThumbnail = idx === 0;
+                            return (
+                              <div key={`existing-${idx}`} className="relative group aspect-square">
+                                <img
+                                  src={url}
+                                  alt={`Existing ${idx + 1}`}
+                                  className={`w-full h-full object-cover rounded-lg ${isThumbnail ? 'ring-2 ring-amber-500' : ''}`}
+                                />
+                                <button
+                                  onClick={() => removeExistingImage(url, idx)}
+                                  className="absolute top-1 right-1 p-1.5 bg-red-600 hover:bg-red-700 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
+                                {isThumbnail ? (
+                                  <div className="absolute bottom-1 left-1 bg-amber-500 text-white px-2 py-0.5 rounded text-xs font-medium">썸네일</div>
+                                ) : (
+                                  <button
+                                    onClick={async () => {
+                                      if (!record) return;
+                                      const minIdx = Math.min(...(editingEvent.imageRecords.map(r => r.order_index)));
+                                      await supabase.from('event_images').update({ order_index: minIdx - 1 }).eq('id', record.id);
+                                      await fetchEvents();
+                                      const refreshed = (await supabase.from('event_images').select('id,image_url,order_index').eq('event_id', editingEvent.id).order('order_index', { ascending: true })).data || [];
+                                      setEventForm(prev => ({ ...prev, existingImages: refreshed.map(r => r.image_url) }));
+                                      setEditingEvent(prev => ({ ...prev, imageRecords: refreshed }));
+                                    }}
+                                    className="absolute bottom-1 left-1 bg-black/70 hover:bg-amber-600 text-white px-2 py-0.5 rounded text-xs opacity-0 group-hover:opacity-100 transition-all"
+                                  >썸네일 설정</button>
+                                )}
                               </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </div>
                     )}
@@ -673,7 +695,22 @@ const QLWebsite = () => {
               </div>
             </div>
 
-            <div className="p-8 border-t border-slate-200 flex space-x-3">
+            <div className="p-8 border-t border-slate-200 space-y-3">
+              {uploadProgress.total > 0 && (
+                <div className="space-y-1">
+                  <div className="flex justify-between text-xs text-slate-500">
+                    <span>이미지 업로드 중...</span>
+                    <span>{uploadProgress.current} / {uploadProgress.total}장</span>
+                  </div>
+                  <div className="w-full bg-slate-200 rounded-full h-2">
+                    <div
+                      className="bg-amber-500 h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${(uploadProgress.current / uploadProgress.total) * 100}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+              <div className="flex space-x-3">
               <button
                 onClick={saveEvent}
                 disabled={uploading}
@@ -684,7 +721,7 @@ const QLWebsite = () => {
                 }`}
               >
                 <Save className="w-5 h-5" />
-                <span>{uploading ? '저장 중...' : '저장'}</span>
+                <span>{uploading ? `업로드 중... (${uploadProgress.current}/${uploadProgress.total})` : '저장'}</span>
               </button>
               <button
                 onClick={() => setShowEventForm(false)}
@@ -693,6 +730,7 @@ const QLWebsite = () => {
               >
                 취소
               </button>
+              </div>
             </div>
           </div>
         </div>

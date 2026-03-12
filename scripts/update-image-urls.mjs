@@ -31,7 +31,7 @@ loadEnv();
 
 const supabase = createClient(
   process.env.VITE_SUPABASE_URL,
-  process.env.VITE_SUPABASE_ANON_KEY
+  process.env.VITE_SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY
 );
 
 const OLD_BASE = 'http://skcrackers.co.kr/ql/events';
@@ -70,10 +70,36 @@ async function main() {
       console.error(`❌ 실패 (id: ${img.id}): ${updateError.message}`);
     } else {
       success++;
+      if (success % 50 === 0) {
+        console.log(`  ⏳ ${success}/${images.length}개 완료...`);
+      }
     }
   }
 
-  console.log(`✨ 완료! ${success}/${images.length}개 URL 업데이트됨`);
+  console.log(`✨ event_images 완료! ${success}/${images.length}개 URL 업데이트됨`);
+
+  // events 테이블 썸네일 URL도 업데이트
+  const { data: events, error: eventsError } = await supabase
+    .from('events')
+    .select('id, image_url')
+    .like('image_url', `${OLD_BASE}%`);
+
+  if (!eventsError && events && events.length > 0) {
+    console.log(`\n📋 events 테이블 업데이트 대상: ${events.length}개`);
+    let evSuccess = 0;
+    for (const ev of events) {
+      const newUrl = ev.image_url.replace(OLD_BASE, NEW_BASE);
+      const { error: updateError } = await supabase
+        .from('events')
+        .update({ image_url: newUrl })
+        .eq('id', ev.id);
+      if (!updateError) evSuccess++;
+    }
+    console.log(`✨ events 완료! ${evSuccess}/${events.length}개 URL 업데이트됨`);
+  } else {
+    console.log(`\n✅ events 테이블: 업데이트할 항목 없음`);
+  }
+
   console.log(`\n변경: ${OLD_BASE}/...`);
   console.log(`   → ${NEW_BASE}/...\n`);
 }
