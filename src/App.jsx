@@ -130,7 +130,7 @@ const QLWebsite = () => {
     }
   };
 
-  // 🔥 Supabase에서 이벤트 불러오기
+  // 🔥 Supabase에서 이벤트 불러오기 (메인에는 썸네일만)
   const fetchEvents = async () => {
     setLoading(true);
     try {
@@ -141,34 +141,51 @@ const QLWebsite = () => {
 
       if (eventsError) throw eventsError;
 
-      const eventsWithImages = await Promise.all(
+      // 이미지 개수(갤러리 배지용) 한 번에 조회
+      const { data: countData } = await supabase.from('event_images').select('event_id');
+      const countByEvent = {};
+      (countData || []).forEach((r) => { countByEvent[r.event_id] = (countByEvent[r.event_id] || 0) + 1; });
+
+      // 각 이벤트마다 썸네일(첫 이미지)만 조회
+      const eventsWithThumbnails = await Promise.all(
         eventsData.map(async (event) => {
-          const { data: imagesData, error: imagesError } = await supabase
+          const { data: thumbData, error: thumbError } = await supabase
             .from('event_images')
             .select('id, image_url, order_index')
             .eq('event_id', event.id)
-            .order('order_index', { ascending: true });
+            .order('order_index', { ascending: true })
+            .limit(1);
 
-          if (imagesError) {
-            console.error('Error fetching images:', imagesError);
-            return { ...event, images: [], imageRecords: [] };
-          }
+          if (thumbError) return { ...event, images: [], imageRecords: [], imageCount: 0 };
+          const thumb = thumbData?.[0];
 
           return {
             ...event,
-            images: imagesData.map(img => img.image_url),
-            imageRecords: imagesData
+            images: thumb ? [thumb.image_url] : [],
+            imageRecords: thumb ? [thumb] : [],
+            imageCount: countByEvent[event.id] || 0
           };
         })
       );
 
-      setEvents(eventsWithImages);
+      setEvents(eventsWithThumbnails);
     } catch (error) {
       console.error('Error fetching events:', error);
       alert('이벤트를 불러오는데 실패했습니다.');
     } finally {
       setLoading(false);
     }
+  };
+
+  // 앨범 클릭 시 해당 이벤트 이미지만 로드
+  const fetchEventGalleryImages = async (eventId) => {
+    const { data, error } = await supabase
+      .from('event_images')
+      .select('id, image_url, order_index')
+      .eq('event_id', eventId)
+      .order('order_index', { ascending: true });
+    if (error) throw error;
+    return data || [];
   };
 
   useEffect(() => {
@@ -318,15 +335,20 @@ const QLWebsite = () => {
     }
   };
 
-  const openEventForm = (event = null) => {
+  const openEventForm = async (event = null) => {
     if (event) {
-      setEditingEvent(event);
+      let fullEvent = event;
+      if (event.imageCount > 1) {
+        const records = await fetchEventGalleryImages(event.id);
+        fullEvent = { ...event, images: records.map(r => r.image_url), imageRecords: records };
+      }
+      setEditingEvent(fullEvent);
       setEventForm({
-        title: event.title,
-        date: event.date,
-        description: event.description || '',
-        imageFiles: [], // 새로 추가할 이미지
-        existingImages: event.images || [] // 기존 이미지 URLs
+        title: fullEvent.title,
+        date: fullEvent.date,
+        description: fullEvent.description || '',
+        imageFiles: [],
+        existingImages: fullEvent.images || []
       });
     } else {
       setEditingEvent(null);
@@ -632,7 +654,7 @@ const QLWebsite = () => {
                   <p className="text-sm text-slate-500 mb-4">최대 {MAX_IMAGES}장까지 (현재 {eventForm.existingImages.length + eventForm.imageFiles.length}장)</p>
                   <input
                     type="file"
-                    accept="image/*,video/*"
+                    accept="image/*,video/*,.heic,.heif"
                     multiple
                     onChange={(e) => e.target.files && handleImageFiles(Array.from(e.target.files))}
                     className="hidden"
@@ -1142,17 +1164,28 @@ const QLWebsite = () => {
                   {event.images && event.images.length > 0 && (
                     <div 
                       className="aspect-video bg-slate-200 overflow-hidden cursor-pointer relative"
-                      onClick={() => setSelectedEventGallery(event)}
+                      onClick={async () => {
+                        if (event.imageCount <= 1) {
+                          setSelectedEventGallery(event);
+                          return;
+                        }
+                        const records = await fetchEventGalleryImages(event.id);
+                        setSelectedEventGallery({
+                          ...event,
+                          images: records.map(r => r.image_url),
+                          imageRecords: records
+                        });
+                      }}
                     >
                       {isVideoUrl(event.images[0]) ? (
                         <video src={event.images[0]} muted playsInline preload="metadata" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
                       ) : (
                         <ImgWithRetry src={event.images[0]} alt={event.title} loading="lazy" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
                       )}
-                      {event.images.length > 1 && (
+                      {(event.imageCount ?? event.images?.length) > 1 && (
                         <div className="absolute bottom-3 right-3 bg-black/70 text-white px-3 py-1 rounded-full text-sm flex items-center space-x-1">
                           <Camera className="w-4 h-4" />
-                          <span>{event.images.length}</span>
+                          <span>{event.imageCount ?? event.images?.length}</span>
                         </div>
                       )}
                     </div>

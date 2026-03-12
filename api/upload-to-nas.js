@@ -1,6 +1,7 @@
 /**
  * NAS WebDAV 업로드 API
  * 웹에서 업로드한 파일을 NAS에 저장하고 공개 URL 반환
+ * HEIC 업로드 시 JPG로 자동 변환 (Chrome 등 브라우저 호환)
  *
  * 환경변수 (Vercel):
  *   WEBDAV_URL      - http://dav.skcrackers.co.kr:5005
@@ -9,6 +10,7 @@
  */
 
 import { createClient } from 'webdav';
+import convert from 'heic-convert';
 
 const PUBLIC_BASE = 'https://media.skcrackers.co.kr/ql/events';
 const WEBDAV_BASE = 'web/ql/events'; // Synology WebDAV: web = 공유폴더명
@@ -98,9 +100,27 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'file, date, title 필수' });
     }
 
+    let fileData = file.data;
+    let ext = (file.filename || '').split('.').pop() || 'jpg';
+    const isHeic = /\.(heic|heif)$/i.test(file.filename || '');
+
+    if (isHeic) {
+      try {
+        const result = await convert({
+          buffer: file.data,
+          format: 'JPEG',
+          quality: 0.92,
+        });
+        fileData = Buffer.isBuffer(result) ? result : Buffer.from(result);
+        ext = 'jpg';
+      } catch (err) {
+        console.error('HEIC conversion failed:', err);
+        return res.status(500).json({ error: 'HEIC 변환 실패: ' + (err.message || '알 수 없는 오류') });
+      }
+    }
+
     const year = date.slice(0, 4);
     const folderName = `${date} ${title}`;
-    const ext = (file.filename || '').split('.').pop() || 'jpg';
     const safeName = `${String(parseInt(index, 10) + 1).padStart(2, '0')}-${Date.now()}.${ext}`;
     const dirPath = `${WEBDAV_BASE}/${year}/${folderName}`;
     const remotePath = `${dirPath}/${safeName}`;
@@ -110,7 +130,7 @@ export default async function handler(req, res) {
       password: WEBDAV_PASSWORD,
     });
     await client.createDirectory(dirPath, { recursive: true });
-    await client.putFileContents(remotePath, file.data, { overwrite: true });
+    await client.putFileContents(remotePath, fileData, { overwrite: true });
 
     const publicUrl = `${PUBLIC_BASE}/${year}/${encodeURIComponent(folderName)}/${encodeURIComponent(safeName)}`;
     return res.status(200).json({ url: publicUrl });
