@@ -132,10 +132,11 @@ async function syncAlbum(yearDir, albumName, existing) {
     return;
   }
 
-  // 2. event_images 등록 (NAS 공개 URL)
+  // 2. event_images 등록 (NAS 공개 URL) - NFC 정규화로 한글 경로 매칭 보장
+  const albumNameNFC = albumName.normalize('NFC');
   const imageRecords = images.map((filename, idx) => ({
     event_id: newEvent.id,
-    image_url: `${PUBLIC_BASE_URL}/${year}/${encodeURIComponent(albumName)}/${encodeURIComponent(filename)}`,
+    image_url: `${PUBLIC_BASE_URL}/${year}/${encodeURIComponent(albumNameNFC)}/${encodeURIComponent(filename.normalize('NFC'))}`,
     order_index: idx,
   }));
 

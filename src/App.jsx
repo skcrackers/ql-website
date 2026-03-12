@@ -38,7 +38,7 @@ const MEMBERS = [
 const isVideoUrl = (url) => /\.(mp4|webm|mov|avi|mkv)(\?|%3F|$)/i.test(url || '');
 
 const QLWebsite = () => {
-  const [activeSection, setActiveSection] = useState('home');
+  const [activeSection, setActiveSection] = useState('members');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [selectedMember, setSelectedMember] = useState(null);
   const [scrolled, setScrolled] = useState(false);
@@ -163,16 +163,19 @@ const QLWebsite = () => {
       setScrolled(window.scrollY > 50);
     };
     window.addEventListener('scroll', handleScroll);
-    
+
     // 인증 상태 확인
     const isAuth = sessionStorage.getItem('ql-auth');
     if (isAuth === 'true') {
       setIsAuthenticated(true);
     }
-    
+
     // Supabase에서 이벤트 불러오기
     fetchEvents();
-    
+
+    // 초기 섹션(members)으로 스크롤
+    requestAnimationFrame(() => document.getElementById('members')?.scrollIntoView({ behavior: 'smooth' }));
+
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
@@ -465,9 +468,9 @@ const QLWebsite = () => {
   const navigation = [
     { name: 'Home', id: 'home' },
     { name: 'Culture Code', id: 'culture' },
-    { name: 'Members', id: 'members' },
     { name: 'Events', id: 'events' },
-    { name: 'Calendar', id: 'calendar' }
+    { name: 'Calendar', id: 'calendar' },
+    { name: 'Members', id: 'members' }
   ];
 
   const MemberCard = ({ member }) => (
