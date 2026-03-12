@@ -19,6 +19,7 @@ export const config = {
   api: {
     bodyParser: false, // multipart 직접 파싱
   },
+  maxDuration: 60, // NAS 연결 대기 시간 확보
 };
 
 function getBoundary(contentType) {

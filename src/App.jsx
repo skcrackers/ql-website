@@ -225,6 +225,20 @@ const QLWebsite = () => {
       if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) continue;
 
       try {
+        const fetchWithTimeout = async (url, options, ms = 120000) => {
+          const ctrl = new AbortController();
+          const tid = setTimeout(() => ctrl.abort(), ms);
+          try {
+            const res = await fetch(url, { ...options, signal: ctrl.signal });
+            clearTimeout(tid);
+            return res;
+          } catch (e) {
+            clearTimeout(tid);
+            if (e.name === 'AbortError') throw new Error('업로드 시간 초과. NAS(WebDAV) 연결을 확인해주세요.');
+            throw e;
+          }
+        };
+
         const tryChunked = async () => {
           const uploadId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
           const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
@@ -240,7 +254,7 @@ const QLWebsite = () => {
             formData.append('title', title);
             formData.append('index', String(i));
             formData.append('filename', file.name);
-            const res = await fetch('/api/upload-chunk', { method: 'POST', body: formData });
+            const res = await fetchWithTimeout('/api/upload-chunk', { method: 'POST', body: formData });
             const data = await res.json().catch(() => ({}));
             if (data.error) throw new Error(data.error);
             if (data.url) return data.url;
@@ -255,7 +269,7 @@ const QLWebsite = () => {
           formData.append('date', date);
           formData.append('title', title);
           formData.append('index', String(i));
-          const res = await fetch('/api/upload-to-nas', { method: 'POST', body: formData });
+          const res = await fetchWithTimeout('/api/upload-to-nas', { method: 'POST', body: formData });
           const data = await res.json().catch(() => ({}));
           if (data.url) {
             uploadedUrls.push(data.url);
