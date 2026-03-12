@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { flushSync } from 'react-dom';
 import { Menu, X, Calendar, Users, BookOpen, ExternalLink, Mail, Instagram, Linkedin, ChevronRight, ChevronLeft, Phone, MapPin, Star, Award, UserCheck, Edit3, Plus, Trash2, Save, Lock, Camera, Upload } from 'lucide-react';
 import { supabase } from '../supabase';
 import CalendarSection from './CalendarSection';
@@ -82,7 +83,7 @@ const QLWebsite = () => {
   const [selectedYear, setSelectedYear] = useState('all');
   const [expandedGroups, setExpandedGroups] = useState({ leadership: true, staff: true, members: false });
   const toggleGroup = (group) => setExpandedGroups(prev => ({ ...prev, [group]: !prev[group] }));
-  const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
+  const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0, currentFile: 0 });
 
   const ADMIN_PASSWORD = 'ql2026';
   const MAX_IMAGES = 100;
@@ -215,14 +216,21 @@ const QLWebsite = () => {
     const uploadedUrls = [];
     const validFiles = files.filter(f => f.type.startsWith('image/') || f.type.startsWith('video/'));
     const totalSteps = validFiles.reduce((acc, f) => acc + (f.size <= CHUNK_SIZE ? 1 : Math.ceil(f.size / CHUNK_SIZE)), 0);
-    setUploadProgress({ current: 0, total: totalSteps });
+    const totalFiles = validFiles.length;
 
     let step = 0;
-    const advance = () => { step++; setUploadProgress(p => ({ ...p, current: step })); };
+    const updateProgress = (updates) => {
+      flushSync(() => setUploadProgress(p => ({ ...p, ...updates })));
+    };
+
+    updateProgress({ current: 0, total: totalSteps, totalFiles, currentFile: 0 });
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) continue;
+
+      // 업로드 시작 시 바로 현재 파일 번호 표시
+      updateProgress({ currentFile: i + 1 });
 
       try {
         const fetchWithTimeout = async (url, options, ms = 120000) => {
@@ -257,8 +265,9 @@ const QLWebsite = () => {
             const res = await fetchWithTimeout('/api/upload-chunk', { method: 'POST', body: formData });
             const data = await res.json().catch(() => ({}));
             if (data.error) throw new Error(data.error);
+            step++;
+            updateProgress({ current: step });
             if (data.url) return data.url;
-            advance();
           }
           return null;
         };
@@ -285,14 +294,14 @@ const QLWebsite = () => {
           if (url) uploadedUrls.push(url);
           else throw new Error('업로드 실패');
         }
-        if (file.size <= CHUNK_SIZE) advance();
+        if (file.size <= CHUNK_SIZE) { step++; updateProgress({ current: step }); }
       } catch (err) {
         console.error('Upload error:', err);
         throw err;
       }
     }
 
-    setUploadProgress({ current: 0, total: 0 });
+    setUploadProgress({ current: 0, total: 0, totalFiles: 0, currentFile: 0 });
     return uploadedUrls;
   };
 
@@ -816,13 +825,22 @@ const QLWebsite = () => {
               {uploadProgress.total > 0 && (
                 <div className="space-y-1">
                   <div className="flex justify-between text-xs text-slate-500">
-                    <span>이미지 업로드 중...</span>
+                    <span>
+                      {uploadProgress.currentFile
+                        ? `${uploadProgress.currentFile}번째 파일 전송 중...`
+                        : '이미지 업로드 중...'}
+                    </span>
                     <span>{uploadProgress.current} / {uploadProgress.total}장</span>
                   </div>
                   <div className="w-full bg-slate-200 rounded-full h-2">
                     <div
                       className="bg-amber-500 h-2 rounded-full transition-all duration-300"
-                      style={{ width: `${(uploadProgress.current / uploadProgress.total) * 100}%` }}
+                      style={{
+                        width: `${Math.min(
+                          100,
+                          ((uploadProgress.current + (uploadProgress.currentFile && uploadProgress.current < uploadProgress.total ? 0.2 : 0)) / uploadProgress.total) * 100
+                        )}%`
+                      }}
                     />
                   </div>
                 </div>
