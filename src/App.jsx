@@ -390,7 +390,13 @@ const QLWebsite = () => {
         // 새 이미지 업로드
         if (eventForm.imageFiles.length > 0) {
           const imageUrls = await uploadImages(eventForm.imageFiles, { date: eventForm.date, title: eventForm.title });
-          
+          if (imageUrls.length === 0) {
+            throw new Error('이미지 업로드에 실패했습니다. 네트워크 연결과 서버 상태를 확인해주세요.');
+          }
+          if (imageUrls.length < eventForm.imageFiles.length) {
+            throw new Error(`이미지 ${eventForm.imageFiles.length}장 중 ${imageUrls.length}장만 업로드되었습니다.`);
+          }
+
           const { data: existingImages } = await supabase
             .from('event_images')
             .select('order_index')
@@ -430,7 +436,13 @@ const QLWebsite = () => {
         // 이미지 업로드
         if (eventForm.imageFiles.length > 0) {
           const imageUrls = await uploadImages(eventForm.imageFiles, { date: eventForm.date, title: eventForm.title });
-          
+          if (imageUrls.length === 0) {
+            throw new Error('이미지 업로드에 실패했습니다. 네트워크 연결과 서버 상태를 확인해주세요.');
+          }
+          if (imageUrls.length < eventForm.imageFiles.length) {
+            throw new Error(`이미지 ${eventForm.imageFiles.length}장 중 ${imageUrls.length}장만 업로드되었습니다.`);
+          }
+
           const imageRecords = imageUrls.map((url, idx) => ({
             event_id: newEvent.id,
             image_url: url,
