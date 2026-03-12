@@ -101,9 +101,9 @@ const CalendarSection = ({ editMode = false }) => {
     }
   };
 
-  // 이벤트 삭제
+  // 이벤트 삭제 (성공 시 true 반환)
   const deleteEvent = async (event) => {
-    if (!confirm('이 일정을 삭제하시겠습니까?')) return;
+    if (!confirm('이 일정을 삭제하시겠습니까?')) return false;
 
     try {
       const { error } = await supabase
@@ -115,9 +115,11 @@ const CalendarSection = ({ editMode = false }) => {
 
       await fetchEvents();
       alert('삭제되었습니다!');
+      return true;
     } catch (error) {
       console.error('Delete error:', error);
       alert('삭제에 실패했습니다: ' + error.message);
+      return false;
     }
   };
 
@@ -559,6 +561,17 @@ const CalendarSection = ({ editMode = false }) => {
               </div>
 
               <div className="p-6 border-t border-slate-200 flex space-x-3">
+                {editingEvent && editMode && (
+                  <button
+                    onClick={async () => {
+                      const success = await deleteEvent(editingEvent);
+                      if (success) setShowEventForm(false);
+                    }}
+                    className="px-4 py-3 text-red-600 hover:bg-red-50 rounded-lg transition-colors font-medium border border-red-200"
+                  >
+                    삭제
+                  </button>
+                )}
                 <button
                   onClick={saveEvent}
                   className="flex-1 bg-amber-600 hover:bg-amber-700 text-white py-3 rounded-lg transition-colors font-medium"
