@@ -272,6 +272,12 @@ const CalendarSection = ({ editMode = false, memberNames = [] }) => {
 
   const isUpdatesEvent = (event) => event?.type === '근황토크';
 
+  // 근황토크 제목 자동생성 (예: 4월 근황토크)
+  const getUpdatesEventTitle = (dateStr) => {
+    const d = dateStr ? new Date(dateStr + 'T00:00:00') : new Date();
+    return `${d.getMonth() + 1}월 근황토크`;
+  };
+
   // 캘린더 헬퍼 함수
   const getDaysInMonth = (date) => {
     const year = date.getFullYear();
@@ -603,7 +609,14 @@ const CalendarSection = ({ editMode = false, memberNames = [] }) => {
                     <input
                       type="date"
                       value={eventForm.date}
-                      onChange={(e) => setEventForm({ ...eventForm, date: e.target.value })}
+                      onChange={(e) => {
+                        const newDate = e.target.value;
+                        const updates = { ...eventForm, date: newDate };
+                        if (eventForm.type === '근황토크') {
+                          updates.title = getUpdatesEventTitle(newDate);
+                        }
+                        setEventForm(updates);
+                      }}
                       className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
                     />
                   </div>
@@ -630,7 +643,13 @@ const CalendarSection = ({ editMode = false, memberNames = [] }) => {
                       <button
                         key={type}
                         type="button"
-                        onClick={() => setEventForm({ ...eventForm, type })}
+                        onClick={() => {
+                          const updates = { ...eventForm, type };
+                          if (type === '근황토크') {
+                            updates.title = getUpdatesEventTitle(eventForm.date);
+                          }
+                          setEventForm(updates);
+                        }}
                         className={`py-3 px-4 rounded-lg border-2 transition-all text-center ${
                           eventForm.type === type
                             ? type === '운영'
