@@ -623,14 +623,15 @@ const CalendarSection = ({ editMode = false, memberNames = [] }) => {
                 {/* 타입 */}
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">
-                    타입 *
+                    타입 * (월간 정기모임은 근황토크 선택)
                   </label>
-                    <div className="flex flex-wrap gap-2">
-                      {['운영', '공지', '일반', '근황토크'].map(type => (
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {['운영', '공지', '일반', '근황토크'].map(type => (
                       <button
                         key={type}
+                        type="button"
                         onClick={() => setEventForm({ ...eventForm, type })}
-                        className={`flex-1 py-3 px-4 rounded-lg border-2 transition-all ${
+                        className={`py-3 px-4 rounded-lg border-2 transition-all text-center ${
                           eventForm.type === type
                             ? type === '운영'
                               ? 'border-blue-500 bg-blue-50 text-blue-700'
