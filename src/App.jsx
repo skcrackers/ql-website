@@ -236,14 +236,21 @@ const QLWebsite = () => {
           method: 'POST',
           body: formData,
         });
-        const data = await res.json();
+        let data;
+        try {
+          data = await res.json();
+        } catch {
+          throw new Error(`업로드 응답 오류 (HTTP ${res.status})`);
+        }
         if (data.url) {
           uploadedUrls.push(data.url);
         } else {
-          console.error('Upload error:', data.error);
+          const msg = data.error || `HTTP ${res.status}`;
+          throw new Error(`이미지 업로드 실패: ${msg}`);
         }
       } catch (err) {
         console.error('Upload error:', err);
+        throw err;
       }
       setUploadProgress({ current: i + 1, total: files.length });
     }
