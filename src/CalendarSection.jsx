@@ -73,6 +73,8 @@ const CalendarSection = ({ editMode = false, memberNames = [] }) => {
     }
   }, [events]);
 
+  const [dbMissing, setDbMissing] = useState(false);
+
   // 근황 불러오기
   const fetchUpdates = async (meetingDate) => {
     try {
@@ -81,7 +83,13 @@ const CalendarSection = ({ editMode = false, memberNames = [] }) => {
         .select('*')
         .eq('meeting_date', meetingDate)
         .order('created_at', { ascending: true });
-      if (error) throw error;
+      if (error) {
+        if (error.message?.includes('monthly_updates') || error.code === '42P01') {
+          setDbMissing(true);
+        }
+        throw error;
+      }
+      setDbMissing(false);
       setUpdates(data || []);
     } catch (err) {
       console.error('Error fetching updates:', err);
@@ -133,7 +141,12 @@ const CalendarSection = ({ editMode = false, memberNames = [] }) => {
       alert('저장되었습니다!');
     } catch (err) {
       console.error('Save update error:', err);
-      alert('저장에 실패했습니다: ' + err.message);
+      if (err.message?.includes('monthly_updates') || err.code === '42P01') {
+        setDbMissing(true);
+        alert('DB 설정이 필요합니다.\nSupabase SQL Editor에서 supabase/monthly_updates.sql 파일을 실행해주세요.');
+      } else {
+        alert('저장에 실패했습니다: ' + err.message);
+      }
     } finally {
       setSavingUpdate(false);
     }
@@ -510,16 +523,18 @@ const CalendarSection = ({ editMode = false, memberNames = [] }) => {
           <div className="h-1 w-24 bg-amber-600 mx-auto mt-6"></div>
         </div>
 
-        {/* 일정 추가 버튼 */}
-        <div className="mb-6 flex justify-end">
-          <button
-            onClick={() => openEventForm()}
-            className="flex items-center space-x-2 bg-amber-600 hover:bg-amber-700 text-white px-6 py-3 rounded-lg transition-colors shadow-lg"
-          >
-            <Plus className="w-5 h-5" />
-            <span>일정 추가</span>
-          </button>
-        </div>
+        {/* 일정 추가 버튼 (editMode일 때만) */}
+        {editMode && (
+          <div className="mb-6 flex justify-end">
+            <button
+              onClick={() => openEventForm()}
+              className="flex items-center space-x-2 bg-amber-600 hover:bg-amber-700 text-white px-6 py-3 rounded-lg transition-colors shadow-lg"
+            >
+              <Plus className="w-5 h-5" />
+              <span>일정 추가</span>
+            </button>
+          </div>
+        )}
 
         {/* 데스크톱: 캘린더 뷰 / 모바일: 리스트 뷰 */}
         {loading ? (
@@ -753,201 +768,217 @@ const CalendarSection = ({ editMode = false, memberNames = [] }) => {
 
         {/* 근황토크 모달 */}
         {showUpdatesModal && selectedEventForUpdates && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
-            <div className="bg-white rounded-2xl max-w-2xl w-full my-8 shadow-2xl max-h-[90vh] flex flex-col">
-              <div className="p-6 border-b border-slate-200 flex-shrink-0">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <h3 className="text-xl font-medium text-slate-900">
-                      {selectedEventForUpdates.title} — 근황
-                    </h3>
-                    <p className="text-sm text-slate-500 mt-1">
-                      {formatDate(selectedEventForUpdates.date)}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {editMode && (
-                      <button
-                        onClick={() => {
-                          closeUpdatesModal();
-                          openEventForm(selectedEventForUpdates);
-                        }}
-                        className="p-2 text-amber-600 hover:bg-amber-50 rounded-lg"
-                        title="일정 수정"
-                      >
-                        <Edit3 className="w-5 h-5" />
-                      </button>
-                    )}
-                    <button
-                      onClick={closeUpdatesModal}
-                      className="p-2 hover:bg-slate-100 rounded-lg"
-                    >
-                      <X className="w-5 h-5" />
-                    </button>
-                  </div>
-                </div>
-              </div>
+          <div
+            className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-y-auto"
+            onClick={(e) => { if (e.target === e.currentTarget) closeUpdatesModal(); }}
+          >
+            <div className="min-h-full flex items-start justify-center sm:items-center sm:p-4">
+              <div className="bg-white w-full sm:rounded-2xl sm:max-w-2xl sm:my-8 shadow-2xl">
 
-              {/* 딥링크 공유 영역 + 작성 현황 */}
-              <div className="mx-6 mb-0 p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-4">
-                <div>
-                  <p className="text-xs text-slate-500 mb-2">카카오톡 등으로 공유할 링크</p>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      readOnly
-                      value={getMeetingShareUrl(selectedEventForUpdates)}
-                      className="flex-1 px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg text-slate-600 truncate"
-                    />
-                    <button
-                      onClick={() => {
-                        navigator.clipboard.writeText(getMeetingShareUrl(selectedEventForUpdates));
-                        alert('링크가 복사되었습니다. 카카오톡으로 공유해보세요!');
-                      }}
-                      className="flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-sm font-medium shrink-0"
-                    >
-                      <Share2 className="w-4 h-4" />
-                      링크 복사
-                    </button>
-                  </div>
-                </div>
-                {/* 작성 현황: 완료 / 미완료 */}
-                <div className="pt-3 border-t border-slate-200">
-                  <p className="text-xs text-slate-500 mb-2">작성 현황 ({updates.length}명 / {memberNames.length}명)</p>
-                  <div className="flex flex-wrap gap-4 text-sm">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                      <span className="text-slate-600 font-medium">완료:</span>
-                      <span className="text-slate-700">
-                        {updates.length === 0 ? '없음' : updates.map(u => u.author_name).join(', ')}
-                      </span>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <Circle className="w-4 h-4 text-slate-400 shrink-0" />
-                      <span className="text-slate-600 font-medium">미완료:</span>
-                      <span className="text-slate-600">
-                        {memberNames.filter(n => !updates.some(u => u.author_name === n)).length === 0
-                          ? '없음'
-                          : memberNames.filter(n => !updates.some(u => u.author_name === n)).join(', ')}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                {/* View 모드 버튼 */}
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    onClick={() => setShowViewMode(true)}
-                    className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white rounded-lg text-sm font-medium"
-                  >
-                    <Monitor className="w-4 h-4" />
-                    전체 보기 (모임용)
-                  </button>
-                  <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(getMeetingShareUrl(selectedEventForUpdates, true));
-                      alert('View 링크가 복사되었습니다. 모임 때 프로젝터/화면 공유용으로 사용하세요!');
-                    }}
-                    className="flex items-center gap-2 px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-lg text-sm font-medium"
-                  >
-                    <Share2 className="w-4 h-4" />
-                    View 링크 복사
-                  </button>
-                </div>
-              </div>
-
-              <div className="p-6 overflow-y-auto flex-1 min-h-0">
-                {/* 작성 폼 */}
-                <div className="mb-6 p-4 bg-amber-50 rounded-xl border border-amber-200">
-                  <h4 className="font-medium text-slate-800 mb-3">근황 작성</h4>
-                  <div className="space-y-3">
+                {/* 헤더 */}
+                <div className="sticky top-0 bg-white z-10 px-4 py-4 sm:px-6 border-b border-slate-200 rounded-t-2xl">
+                  <div className="flex items-start justify-between gap-3">
                     <div>
-                      <label className="block text-sm text-slate-600 mb-1">이름 *</label>
-                      <select
-                        value={updateForm.author_name}
-                        onChange={(e) => setUpdateForm({ ...updateForm, author_name: e.target.value })}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500"
-                      >
-                        <option value="">선택하세요</option>
-                        {memberNames.map((name) => (
-                          <option key={name} value={name}>{name}</option>
-                        ))}
-                        <option value="__custom__">── 직접 입력 ──</option>
-                      </select>
-                      {updateForm.author_name === '__custom__' && (
-                        <input
-                          type="text"
-                          value={updateForm.custom_name}
-                          onChange={(e) => setUpdateForm({ ...updateForm, custom_name: e.target.value })}
-                          placeholder="이름을 입력하세요"
-                          className="mt-2 w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500"
-                        />
-                      )}
+                      <h3 className="text-lg sm:text-xl font-medium text-slate-900">
+                        {selectedEventForUpdates.title} — 근황
+                      </h3>
+                      <p className="text-sm text-slate-500 mt-0.5">
+                        {formatDate(selectedEventForUpdates.date)}
+                      </p>
                     </div>
-                    <div>
-                      <label className="block text-sm text-slate-600 mb-1">근황 *</label>
-                      <textarea
-                        value={updateForm.content}
-                        onChange={(e) => setUpdateForm({ ...updateForm, content: e.target.value })}
-                        placeholder="이번 달 근황을 간단히 적어주세요"
-                        rows={3}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm text-slate-600 mb-1">링크 (선택)</label>
-                      <input
-                        type="url"
-                        value={updateForm.optional_link}
-                        onChange={(e) => setUpdateForm({ ...updateForm, optional_link: e.target.value })}
-                        placeholder="https://..."
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500"
-                      />
-                    </div>
-                    <button
-                      onClick={saveUpdate}
-                      disabled={savingUpdate}
-                      className="w-full py-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-lg font-medium"
-                    >
-                      {savingUpdate ? '저장 중...' : '저장'}
-                    </button>
-                  </div>
-                </div>
-
-                {/* 작성된 근황 목록 */}
-                <div>
-                  <h4 className="font-medium text-slate-800 mb-3">
-                    작성된 근황 ({updates.length}명)
-                  </h4>
-                  {updates.length === 0 ? (
-                    <p className="text-slate-500 text-sm">아직 작성된 근황이 없습니다.</p>
-                  ) : (
-                    <div className="space-y-3">
-                      {updates.map((u) => (
-                        <div
-                          key={u.id}
-                          className="p-4 bg-slate-50 rounded-lg border border-slate-100"
+                    <div className="flex items-center gap-1 shrink-0">
+                      {editMode && (
+                        <button
+                          onClick={() => { closeUpdatesModal(); openEventForm(selectedEventForUpdates); }}
+                          className="p-2 text-amber-600 hover:bg-amber-50 rounded-lg"
+                          title="일정 수정"
                         >
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="font-medium text-slate-900">{u.author_name}</span>
-                            <span className="text-xs text-slate-400">
-                              {new Date(u.created_at).toLocaleDateString('ko-KR')}
-                            </span>
-                          </div>
-                          <p className="text-sm text-slate-700 whitespace-pre-line">{u.content}</p>
-                          {u.optional_link && (
-                            <a
-                              href={u.optional_link}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-xs text-amber-600 hover:underline mt-2 inline-block"
-                            >
-                              링크 열기 →
-                            </a>
-                          )}
-                        </div>
-                      ))}
+                          <Edit3 className="w-5 h-5" />
+                        </button>
+                      )}
+                      <button onClick={closeUpdatesModal} className="p-2 hover:bg-slate-100 rounded-lg">
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 본문 (단일 스크롤) */}
+                <div className="px-4 py-4 sm:px-6 sm:py-6 space-y-5">
+
+                  {/* DB 미생성 경고 */}
+                  {dbMissing && (
+                    <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
+                      <strong>DB 설정 필요</strong><br />
+                      Supabase SQL Editor에서 <code>supabase/monthly_updates.sql</code>을 실행해주세요.
                     </div>
                   )}
+
+                  {/* 딥링크 공유 */}
+                  <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-4">
+                    <div>
+                      <p className="text-xs text-slate-500 mb-2">카카오톡 등으로 공유할 링크</p>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          readOnly
+                          value={getMeetingShareUrl(selectedEventForUpdates)}
+                          className="flex-1 min-w-0 px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg text-slate-600 truncate"
+                        />
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(getMeetingShareUrl(selectedEventForUpdates));
+                            alert('링크가 복사되었습니다. 카카오톡으로 공유해보세요!');
+                          }}
+                          className="flex items-center gap-1.5 px-3 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-sm font-medium shrink-0"
+                        >
+                          <Share2 className="w-4 h-4" />
+                          <span className="hidden sm:inline">링크 복사</span>
+                          <span className="sm:hidden">복사</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* 작성 현황 */}
+                    <div className="pt-3 border-t border-slate-200">
+                      <p className="text-xs text-slate-500 mb-2">
+                        작성 현황 ({updates.length}명 / {memberNames.length}명)
+                      </p>
+                      <div className="space-y-1.5 text-sm">
+                        <div className="flex flex-wrap items-baseline gap-1.5">
+                          <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                          <span className="text-slate-600 font-medium shrink-0">완료:</span>
+                          <span className="text-slate-700">
+                            {updates.length === 0 ? '없음' : updates.map(u => u.author_name).join(', ')}
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap items-baseline gap-1.5">
+                          <Circle className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
+                          <span className="text-slate-600 font-medium shrink-0">미완료:</span>
+                          <span className="text-slate-500">
+                            {memberNames.filter(n => !updates.some(u => u.author_name === n)).length === 0
+                              ? '없음'
+                              : memberNames.filter(n => !updates.some(u => u.author_name === n)).join(', ')}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* View 모드 */}
+                    <div className="pt-3 border-t border-slate-200 flex flex-wrap gap-2">
+                      <button
+                        onClick={() => setShowViewMode(true)}
+                        className="flex items-center gap-1.5 px-3 py-2 bg-slate-700 hover:bg-slate-800 text-white rounded-lg text-sm font-medium"
+                      >
+                        <Monitor className="w-4 h-4" />
+                        전체 보기 (모임용)
+                      </button>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(getMeetingShareUrl(selectedEventForUpdates, true));
+                          alert('View 링크가 복사되었습니다!');
+                        }}
+                        className="flex items-center gap-1.5 px-3 py-2 bg-slate-500 hover:bg-slate-600 text-white rounded-lg text-sm font-medium"
+                      >
+                        <Share2 className="w-4 h-4" />
+                        View 링크 복사
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 근황 작성 폼 */}
+                  <div className="p-4 bg-amber-50 rounded-xl border border-amber-200">
+                    <h4 className="font-medium text-slate-800 mb-3">근황 작성</h4>
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-sm text-slate-600 mb-1">이름 *</label>
+                        <select
+                          value={updateForm.author_name}
+                          onChange={(e) => setUpdateForm({ ...updateForm, author_name: e.target.value })}
+                          className="w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500 text-base"
+                        >
+                          <option value="">선택하세요</option>
+                          {memberNames.map((name) => (
+                            <option key={name} value={name}>{name}</option>
+                          ))}
+                          <option value="__custom__">── 직접 입력 ──</option>
+                        </select>
+                        {updateForm.author_name === '__custom__' && (
+                          <input
+                            type="text"
+                            value={updateForm.custom_name}
+                            onChange={(e) => setUpdateForm({ ...updateForm, custom_name: e.target.value })}
+                            placeholder="이름을 입력하세요"
+                            className="mt-2 w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500 text-base"
+                          />
+                        )}
+                      </div>
+                      <div>
+                        <label className="block text-sm text-slate-600 mb-1">근황 *</label>
+                        <textarea
+                          value={updateForm.content}
+                          onChange={(e) => setUpdateForm({ ...updateForm, content: e.target.value })}
+                          placeholder="이번 달 근황을 간단히 적어주세요"
+                          rows={4}
+                          className="w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500 text-base"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm text-slate-600 mb-1">링크 (선택)</label>
+                        <input
+                          type="url"
+                          value={updateForm.optional_link}
+                          onChange={(e) => setUpdateForm({ ...updateForm, optional_link: e.target.value })}
+                          placeholder="https://..."
+                          className="w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500 text-base"
+                        />
+                      </div>
+                      <button
+                        onClick={saveUpdate}
+                        disabled={savingUpdate || dbMissing}
+                        className="w-full py-3 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-lg font-medium text-base"
+                      >
+                        {savingUpdate ? '저장 중...' : '저장'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 작성된 근황 목록 */}
+                  <div>
+                    <h4 className="font-medium text-slate-800 mb-3">
+                      작성된 근황 ({updates.length}명)
+                    </h4>
+                    {updates.length === 0 ? (
+                      <p className="text-slate-500 text-sm py-4 text-center">아직 작성된 근황이 없습니다.</p>
+                    ) : (
+                      <div className="space-y-3">
+                        {updates.map((u) => (
+                          <div key={u.id} className="p-4 bg-slate-50 rounded-lg border border-slate-100">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="font-medium text-slate-900">{u.author_name}</span>
+                              <span className="text-xs text-slate-400">
+                                {new Date(u.created_at).toLocaleDateString('ko-KR')}
+                              </span>
+                            </div>
+                            <p className="text-sm text-slate-700 whitespace-pre-line">{u.content}</p>
+                            {u.optional_link && (
+                              <a
+                                href={u.optional_link}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs text-amber-600 hover:underline mt-2 inline-block"
+                              >
+                                링크 열기 →
+                              </a>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 하단 여백 (iOS 홈 인디케이터 대응) */}
+                  <div className="h-4 sm:h-0" />
                 </div>
               </div>
             </div>
