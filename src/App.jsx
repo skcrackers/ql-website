@@ -932,7 +932,7 @@ const QLWebsite = () => {
                     {selectedEventGallery.images.map((image, idx) => (
                       <div
                         key={idx}
-                        className="relative break-inside-avoid group cursor-pointer rounded-lg overflow-hidden bg-black/20 aspect-video"
+                        className={`relative break-inside-avoid group cursor-pointer rounded-lg overflow-hidden bg-black/20 ${isVideoUrl(image) ? 'aspect-video' : ''}`}
                         onClick={() => setLightboxIndex(idx)}
                       >
                         {isVideoUrl(image) ? (
@@ -955,7 +955,7 @@ const QLWebsite = () => {
                             src={image}
                             alt={`${selectedEventGallery.title} ${idx + 1}`}
                             loading="lazy"
-                            className="w-full h-full object-cover block group-hover:brightness-75 transition-all duration-200"
+                            className="w-full h-auto block group-hover:brightness-75 transition-all duration-200"
                           />
                         )}
                         {/* 썸네일 배지 */}
