@@ -3,6 +3,8 @@ import { Menu, X, Calendar, Users, BookOpen, ExternalLink, Mail, Instagram, Link
 import { supabase } from '../supabase';
 import CalendarSection from './CalendarSection';
 
+const CHUNK_SIZE = 4 * 1024 * 1024; // Vercel 4.5MB 제한보다 작게
+
 // 멤버 데이터 (CSV 2026-02-12 기준)
 const LEADERSHIP = [
   { name: "이재형", role: "대표", company: "Maxxij", phone: "010-9380-8877", email: "maxxi.eeee@gmail.com", location: "서울 강남", profile_link: "@maxxij_ldn, @maxxij_official", mbti: "ENTP 변론가", interests: "AI 창작, 진화성장, 개방적사고, 딥워크 루틴", bio: "maxxij", shared_link: "", image: "/images/이재형.jpeg", group: "대표단" },
@@ -208,54 +210,60 @@ const QLWebsite = () => {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // 🔥 이미지/동영상 업로드 (NAS WebDAV)
+  // 🔥 이미지/동영상 업로드 (NAS WebDAV) - 4MB 초과 시 청크 업로드로 100MB+ 지원
   const uploadImages = async (files, { date, title }) => {
     const uploadedUrls = [];
-    setUploadProgress({ current: 0, total: files.length });
+    const validFiles = files.filter(f => f.type.startsWith('image/') || f.type.startsWith('video/'));
+    const totalSteps = validFiles.reduce((acc, f) => acc + (f.size <= CHUNK_SIZE ? 1 : Math.ceil(f.size / CHUNK_SIZE)), 0);
+    setUploadProgress({ current: 0, total: totalSteps });
 
-    const apiUrl = '/api/upload-to-nas';
+    let step = 0;
+    const advance = () => { step++; setUploadProgress(p => ({ ...p, current: step })); };
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      const isImage = file.type.startsWith('image/');
-      const isVideo = file.type.startsWith('video/');
-      if (!isImage && !isVideo) {
-        setUploadProgress(p => ({ ...p, current: i + 1 }));
-        continue;
-      }
-
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('date', date);
-      formData.append('title', title);
-      formData.append('index', String(i));
+      if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) continue;
 
       try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 60000);
-        const res = await fetch(apiUrl, {
-          method: 'POST',
-          body: formData,
-          signal: controller.signal,
-        });
-        clearTimeout(timeoutId);
-        let data;
-        try {
-          data = await res.json();
-        } catch {
-          throw new Error(`업로드 응답 오류 (HTTP ${res.status})`);
-        }
-        if (data.url) {
-          uploadedUrls.push(data.url);
+        if (file.size <= CHUNK_SIZE) {
+          const formData = new FormData();
+          formData.append('file', file);
+          formData.append('date', date);
+          formData.append('title', title);
+          formData.append('index', String(i));
+          const res = await fetch('/api/upload-to-nas', { method: 'POST', body: formData });
+          const data = await res.json().catch(() => ({}));
+          if (data.url) uploadedUrls.push(data.url);
+          else throw new Error(data.error || `HTTP ${res.status}`);
         } else {
-          const msg = data.error || `HTTP ${res.status}`;
-          throw new Error(`이미지 업로드 실패: ${msg}`);
+          const uploadId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+          const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+
+          for (let ci = 0; ci < totalChunks; ci++) {
+            const start = ci * CHUNK_SIZE;
+            const chunkBlob = file.slice(start, Math.min(start + CHUNK_SIZE, file.size));
+            const formData = new FormData();
+            formData.append('chunk', chunkBlob, file.name);
+            formData.append('uploadId', uploadId);
+            formData.append('chunkIndex', String(ci));
+            formData.append('totalChunks', String(totalChunks));
+            formData.append('date', date);
+            formData.append('title', title);
+            formData.append('index', String(i));
+            formData.append('filename', file.name);
+
+            const res = await fetch('/api/upload-chunk', { method: 'POST', body: formData });
+            const data = await res.json().catch(() => ({}));
+            if (data.error) throw new Error(data.error);
+            if (data.url) uploadedUrls.push(data.url);
+            advance();
+          }
         }
+        if (file.size <= CHUNK_SIZE) advance();
       } catch (err) {
         console.error('Upload error:', err);
         throw err;
       }
-      setUploadProgress({ current: i + 1, total: files.length });
     }
 
     setUploadProgress({ current: 0, total: 0 });
