@@ -38,7 +38,7 @@ const MEMBERS = [
   { name: "정다빈", role: "대표이사", company: "밤부네트워크", phone: "010-9754-7711", email: "chung@bamboonetwork.co.kr", location: "서울", profile_link: "https://bamboonetwork.co.kr/", mbti: "ENTJ 통솔자", interests: "ai, 크리에이터이코너미, 숏폼", bio: "Beyond production, I specialize in building scalable IP pipelines, integrating branded content strategies, and forging global partnerships across Asia, the U.S., and beyond. My mission is to redefine storytelling as a business model—where creativity meets systemization, and content evolves into long-term IP value.", shared_link: "https://www.linkedin.com/in/dabin-chung-717403174/", image: "/images/정다빈.jpg", group: "회원" }
 ];
 
-const isVideoUrl = (url) => /\.(mp4|webm|mov|avi|mkv)(\?|%3F|$)/i.test(url || '');
+const isVideoUrl = (url) => /\.(mp4|webm|mov|avi|mkv|m4v)(\?|%3F|$)/i.test(url || '');
 
 // 로드 실패 시 재시도 (동시 연결 제한으로 인한 일시적 실패 대응)
 function ImgWithRetry({ src, alt, className, loading }) {
@@ -756,11 +756,15 @@ const QLWebsite = () => {
                             const isThumbnail = idx === 0;
                             return (
                               <div key={`existing-${idx}`} className="relative group aspect-square">
-                                <img
-                                  src={url}
-                                  alt={`Existing ${idx + 1}`}
-                                  className={`w-full h-full object-cover rounded-lg ${isThumbnail ? 'ring-2 ring-amber-500' : ''}`}
-                                />
+                                {isVideoUrl(url) ? (
+                                  <video src={url} muted playsInline preload="metadata" className={`w-full h-full object-cover rounded-lg ${isThumbnail ? 'ring-2 ring-amber-500' : ''}`} />
+                                ) : (
+                                  <img
+                                    src={url}
+                                    alt={`Existing ${idx + 1}`}
+                                    className={`w-full h-full object-cover rounded-lg ${isThumbnail ? 'ring-2 ring-amber-500' : ''}`}
+                                  />
+                                )}
                                 <button
                                   onClick={() => removeExistingImage(url, idx)}
                                   className="absolute top-1 right-1 p-1.5 bg-red-600 hover:bg-red-700 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
@@ -797,11 +801,15 @@ const QLWebsite = () => {
                         <div className="grid grid-cols-4 gap-3">
                           {eventForm.imageFiles.map((file, idx) => (
                             <div key={`new-${idx}`} className="relative group aspect-square">
-                              <img 
-                                src={URL.createObjectURL(file)} 
-                                alt={`New ${idx + 1}`} 
-                                className="w-full h-full object-cover rounded-lg border-2 border-amber-300" 
-                              />
+                              {file.type.startsWith('video/') ? (
+                                <video src={URL.createObjectURL(file)} muted playsInline preload="metadata" className="w-full h-full object-cover rounded-lg border-2 border-amber-300" />
+                              ) : (
+                                <img 
+                                  src={URL.createObjectURL(file)} 
+                                  alt={`New ${idx + 1}`} 
+                                  className="w-full h-full object-cover rounded-lg border-2 border-amber-300" 
+                                />
+                              )}
                               <button
                                 onClick={() => removeImageFile(idx)}
                                 className="absolute top-1 right-1 p-1.5 bg-red-600 hover:bg-red-700 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
@@ -911,7 +919,7 @@ const QLWebsite = () => {
                   {selectedEventGallery.images && selectedEventGallery.images.length > 0 && (
                     <div className="flex items-center space-x-2 text-white/60">
                       <Camera className="w-4 h-4" />
-                      <span className="text-sm">사진 {selectedEventGallery.images.length}장</span>
+                      <span className="text-sm">사진·동영상 {selectedEventGallery.images.length}개</span>
                     </div>
                   )}
                 </div>
@@ -924,23 +932,30 @@ const QLWebsite = () => {
                     {selectedEventGallery.images.map((image, idx) => (
                       <div
                         key={idx}
-                        className="relative break-inside-avoid group cursor-pointer rounded-lg overflow-hidden bg-black/20"
+                        className="relative break-inside-avoid group cursor-pointer rounded-lg overflow-hidden bg-black/20 aspect-video"
                         onClick={() => setLightboxIndex(idx)}
                       >
                         {isVideoUrl(image) ? (
-                          <video
-                            src={image}
-                            className="w-full h-auto block group-hover:brightness-75 transition-all duration-200"
-                            muted
-                            playsInline
-                            preload="metadata"
-                          />
+                          <>
+                            <video
+                              src={image}
+                              className="w-full h-full object-cover block group-hover:brightness-75 transition-all duration-200"
+                              muted
+                              playsInline
+                              preload="metadata"
+                            />
+                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                              <div className="w-12 h-12 rounded-full bg-black/50 flex items-center justify-center">
+                                <svg className="w-6 h-6 text-white ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                              </div>
+                            </div>
+                          </>
                         ) : (
                           <ImgWithRetry
                             src={image}
                             alt={`${selectedEventGallery.title} ${idx + 1}`}
                             loading="lazy"
-                            className="w-full h-auto block group-hover:brightness-75 transition-all duration-200"
+                            className="w-full h-full object-cover block group-hover:brightness-75 transition-all duration-200"
                           />
                         )}
                         {/* 썸네일 배지 */}
@@ -1012,11 +1027,12 @@ const QLWebsite = () => {
 
           {/* 사진/동영상 */}
           {isVideoUrl(selectedEventGallery.images[lightboxIndex]) ? (
-            <video
-              src={selectedEventGallery.images[lightboxIndex]}
-              controls
-              autoPlay
-              className="max-h-screen max-w-full object-contain px-16"
+              <video
+                src={selectedEventGallery.images[lightboxIndex]}
+                controls
+                autoPlay
+                playsInline
+                className="max-h-screen max-w-full object-contain px-16"
               onClick={(e) => e.stopPropagation()}
             />
           ) : (
