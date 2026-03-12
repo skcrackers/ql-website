@@ -37,6 +37,18 @@ const MEMBERS = [
 
 const isVideoUrl = (url) => /\.(mp4|webm|mov|avi|mkv)(\?|%3F|$)/i.test(url || '');
 
+// 로드 실패 시 재시도 (동시 연결 제한으로 인한 일시적 실패 대응)
+function ImgWithRetry({ src, alt, className, loading }) {
+  const [retry, setRetry] = useState(0);
+  const handleError = () => {
+    if (retry < 2) setTimeout(() => setRetry(r => r + 1), 1000 * (retry + 1));
+  };
+  return (
+    <img key={retry} src={src} alt={alt} className={className} loading={loading}
+      onError={handleError} />
+  );
+}
+
 const QLWebsite = () => {
   const [activeSection, setActiveSection] = useState('members');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -817,7 +829,7 @@ const QLWebsite = () => {
                             preload="metadata"
                           />
                         ) : (
-                          <img
+                          <ImgWithRetry
                             src={image}
                             alt={`${selectedEventGallery.title} ${idx + 1}`}
                             loading="lazy"
@@ -1134,7 +1146,7 @@ const QLWebsite = () => {
                       {isVideoUrl(event.images[0]) ? (
                         <video src={event.images[0]} muted playsInline preload="metadata" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
                       ) : (
-                        <img src={event.images[0]} alt={event.title} loading="lazy" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
+                        <ImgWithRetry src={event.images[0]} alt={event.title} loading="lazy" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
                       )}
                       {event.images.length > 1 && (
                         <div className="absolute bottom-3 right-3 bg-black/70 text-white px-3 py-1 rounded-full text-sm flex items-center space-x-1">
