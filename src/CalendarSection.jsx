@@ -643,7 +643,7 @@ const CalendarSection = ({ editMode = false, memberNames = [] }) => {
                         }
                         setEventForm(updates);
                       }}
-                      className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      className="w-full px-4 py-3 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 text-base"
                     />
                   </div>
                   <div>
@@ -654,7 +654,7 @@ const CalendarSection = ({ editMode = false, memberNames = [] }) => {
                       type="time"
                       value={eventForm.time}
                       onChange={(e) => setEventForm({ ...eventForm, time: e.target.value })}
-                      className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      className="w-full px-4 py-3 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 text-base"
                     />
                   </div>
                 </div>

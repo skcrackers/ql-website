@@ -9,4 +9,14 @@ export default defineConfig({
       '/api': { target: 'https://ql-website.vercel.app', changeOrigin: true },
     },
   },
+  test: {
+    environment: 'jsdom',
+    globals: true,
+    setupFiles: ['./src/test/setup.js'],
+    coverage: {
+      reporter: ['text', 'html'],
+      include: ['src/**/*.{js,jsx}'],
+      exclude: ['src/test/**', 'src/main.jsx'],
+    },
+  },
 })
