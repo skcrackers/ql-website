@@ -35,6 +35,8 @@ const MEMBERS = [
   { name: "정다빈", role: "대표이사", company: "밤부네트워크", phone: "010-9754-7711", email: "chung@bamboonetwork.co.kr", location: "서울", profile_link: "https://bamboonetwork.co.kr/", mbti: "ENTJ 통솔자", interests: "ai, 크리에이터이코너미, 숏폼", bio: "Beyond production, I specialize in building scalable IP pipelines, integrating branded content strategies, and forging global partnerships across Asia, the U.S., and beyond. My mission is to redefine storytelling as a business model—where creativity meets systemization, and content evolves into long-term IP value.", shared_link: "https://www.linkedin.com/in/dabin-chung-717403174/", image: "/images/정다빈.jpg", group: "회원" }
 ];
 
+const isVideoUrl = (url) => /\.(mp4|webm|mov|avi|mkv)(\?|%3F|$)/i.test(url || '');
+
 const QLWebsite = () => {
   const [activeSection, setActiveSection] = useState('home');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -174,31 +176,42 @@ const QLWebsite = () => {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // 🔥 이미지 업로드 (Supabase Storage)
-  const uploadImages = async (files, eventId) => {
+  // 🔥 이미지/동영상 업로드 (NAS WebDAV)
+  const uploadImages = async (files, { date, title }) => {
     const uploadedUrls = [];
     setUploadProgress({ current: 0, total: files.length });
 
+    const apiUrl = '/api/upload-to-nas';
+
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${eventId}/${Date.now()}_${i}.${fileExt}`;
-
-      const { data, error } = await supabase.storage
-        .from('event-images')
-        .upload(fileName, file);
-
-      if (error) {
-        console.error('Upload error:', error);
+      const isImage = file.type.startsWith('image/');
+      const isVideo = file.type.startsWith('video/');
+      if (!isImage && !isVideo) {
         setUploadProgress(p => ({ ...p, current: i + 1 }));
         continue;
       }
 
-      const { data: { publicUrl } } = supabase.storage
-        .from('event-images')
-        .getPublicUrl(fileName);
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('date', date);
+      formData.append('title', title);
+      formData.append('index', String(i));
 
-      uploadedUrls.push(publicUrl);
+      try {
+        const res = await fetch(apiUrl, {
+          method: 'POST',
+          body: formData,
+        });
+        const data = await res.json();
+        if (data.url) {
+          uploadedUrls.push(data.url);
+        } else {
+          console.error('Upload error:', data.error);
+        }
+      } catch (err) {
+        console.error('Upload error:', err);
+      }
       setUploadProgress({ current: i + 1, total: files.length });
     }
 
@@ -227,7 +240,7 @@ const QLWebsite = () => {
   };
 
   const handleImageFiles = (files) => {
-    const imageFiles = files.filter(file => file.type.startsWith('image/'));
+    const imageFiles = files.filter(file => file.type.startsWith('image/') || file.type.startsWith('video/'));
     const currentTotal = eventForm.existingImages.length + eventForm.imageFiles.length;
     const remainingSlots = MAX_IMAGES - currentTotal;
     const filesToAdd = imageFiles.slice(0, remainingSlots);
@@ -331,7 +344,7 @@ const QLWebsite = () => {
 
         // 새 이미지 업로드
         if (eventForm.imageFiles.length > 0) {
-          const imageUrls = await uploadImages(eventForm.imageFiles, editingEvent.id);
+          const imageUrls = await uploadImages(eventForm.imageFiles, { date: eventForm.date, title: eventForm.title });
           
           const { data: existingImages } = await supabase
             .from('event_images')
@@ -371,7 +384,7 @@ const QLWebsite = () => {
 
         // 이미지 업로드
         if (eventForm.imageFiles.length > 0) {
-          const imageUrls = await uploadImages(eventForm.imageFiles, newEvent.id);
+          const imageUrls = await uploadImages(eventForm.imageFiles, { date: eventForm.date, title: eventForm.title });
           
           const imageRecords = imageUrls.map((url, idx) => ({
             event_id: newEvent.id,
@@ -603,7 +616,7 @@ const QLWebsite = () => {
                   <p className="text-sm text-slate-500 mb-4">최대 {MAX_IMAGES}장까지 (현재 {eventForm.existingImages.length + eventForm.imageFiles.length}장)</p>
                   <input
                     type="file"
-                    accept="image/*"
+                    accept="image/*,video/*"
                     multiple
                     onChange={(e) => e.target.files && handleImageFiles(Array.from(e.target.files))}
                     className="hidden"
@@ -792,12 +805,22 @@ const QLWebsite = () => {
                         className="relative break-inside-avoid group cursor-pointer rounded-lg overflow-hidden bg-black/20"
                         onClick={() => setLightboxIndex(idx)}
                       >
-                        <img
-                          src={image}
-                          alt={`${selectedEventGallery.title} ${idx + 1}`}
-                          loading="lazy"
-                          className="w-full h-auto block group-hover:brightness-75 transition-all duration-200"
-                        />
+                        {isVideoUrl(image) ? (
+                          <video
+                            src={image}
+                            className="w-full h-auto block group-hover:brightness-75 transition-all duration-200"
+                            muted
+                            playsInline
+                            preload="metadata"
+                          />
+                        ) : (
+                          <img
+                            src={image}
+                            alt={`${selectedEventGallery.title} ${idx + 1}`}
+                            loading="lazy"
+                            className="w-full h-auto block group-hover:brightness-75 transition-all duration-200"
+                          />
+                        )}
                         {/* 썸네일 배지 */}
                         {idx === 0 && (
                           <div className="absolute top-2 left-2 bg-amber-500 text-white text-xs px-2 py-0.5 rounded-full font-medium">
@@ -865,13 +888,23 @@ const QLWebsite = () => {
             </button>
           )}
 
-          {/* 사진 */}
-          <img
-            src={selectedEventGallery.images[lightboxIndex]}
-            alt={`${selectedEventGallery.title} ${lightboxIndex + 1}`}
-            className="max-h-screen max-w-full object-contain px-16"
-            onClick={(e) => e.stopPropagation()}
-          />
+          {/* 사진/동영상 */}
+          {isVideoUrl(selectedEventGallery.images[lightboxIndex]) ? (
+            <video
+              src={selectedEventGallery.images[lightboxIndex]}
+              controls
+              autoPlay
+              className="max-h-screen max-w-full object-contain px-16"
+              onClick={(e) => e.stopPropagation()}
+            />
+          ) : (
+            <img
+              src={selectedEventGallery.images[lightboxIndex]}
+              alt={`${selectedEventGallery.title} ${lightboxIndex + 1}`}
+              className="max-h-screen max-w-full object-contain px-16"
+              onClick={(e) => e.stopPropagation()}
+            />
+          )}
 
           {/* 카운터 */}
           <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-black/60 text-white px-4 py-2 rounded-full text-sm">
@@ -1032,83 +1065,6 @@ const QLWebsite = () => {
         </div>
       </section>
 
-      {/* Members Section */}
-      <section id="members" className="py-20 px-4">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-16">
-            <h3 className="text-4xl md:text-5xl font-light text-slate-900 mb-4">Our Members</h3>
-            <p className="text-slate-600 text-lg">다양한 분야의 전문가들이 함께합니다</p>
-            <div className="h-1 w-24 bg-amber-600 mx-auto mt-6"></div>
-          </div>
-
-          {/* 대표단 */}
-          <div className="mb-8">
-            <button
-              onClick={() => toggleGroup('leadership')}
-              className="flex items-center justify-between w-full group mb-6"
-            >
-              <div className="flex items-center space-x-3">
-                <Star className="w-6 h-6 text-amber-600" />
-                <h4 className="text-3xl font-light text-slate-900">대표단</h4>
-                <span className="text-sm text-slate-400 ml-2">{LEADERSHIP.length}명</span>
-              </div>
-              <ChevronLeft className={`w-5 h-5 text-slate-400 transition-transform duration-300 ${expandedGroups.leadership ? '-rotate-90' : 'rotate-180'}`} />
-            </button>
-            {expandedGroups.leadership && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-8">
-                {LEADERSHIP.map((member, idx) => (
-                  <MemberCard key={idx} member={member} />
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* 운영진 */}
-          <div className="mb-8">
-            <button
-              onClick={() => toggleGroup('staff')}
-              className="flex items-center justify-between w-full group mb-6"
-            >
-              <div className="flex items-center space-x-3">
-                <Award className="w-6 h-6 text-blue-600" />
-                <h4 className="text-3xl font-light text-slate-900">운영진</h4>
-                <span className="text-sm text-slate-400 ml-2">{STAFF.length}명</span>
-              </div>
-              <ChevronLeft className={`w-5 h-5 text-slate-400 transition-transform duration-300 ${expandedGroups.staff ? '-rotate-90' : 'rotate-180'}`} />
-            </button>
-            {expandedGroups.staff && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-8">
-                {STAFF.map((member, idx) => (
-                  <MemberCard key={idx} member={member} />
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* 회원 */}
-          <div>
-            <button
-              onClick={() => toggleGroup('members')}
-              className="flex items-center justify-between w-full group mb-6"
-            >
-              <div className="flex items-center space-x-3">
-                <UserCheck className="w-6 h-6 text-emerald-600" />
-                <h4 className="text-3xl font-light text-slate-900">회원</h4>
-                <span className="text-sm text-slate-400 ml-2">{MEMBERS.length}명</span>
-              </div>
-              <ChevronLeft className={`w-5 h-5 text-slate-400 transition-transform duration-300 ${expandedGroups.members ? '-rotate-90' : 'rotate-180'}`} />
-            </button>
-            {expandedGroups.members && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-                {MEMBERS.map((member, idx) => (
-                  <MemberCard key={idx} member={member} />
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      </section>
-
       {/* Events Section */}
       <section id="events" className="py-20 px-4 bg-gradient-to-br from-amber-50 to-white">
         <div className="max-w-6xl mx-auto">
@@ -1172,7 +1128,11 @@ const QLWebsite = () => {
                       className="aspect-video bg-slate-200 overflow-hidden cursor-pointer relative"
                       onClick={() => setSelectedEventGallery(event)}
                     >
-                      <img src={event.images[0]} alt={event.title} loading="lazy" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
+                      {isVideoUrl(event.images[0]) ? (
+                        <video src={event.images[0]} muted playsInline preload="metadata" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
+                      ) : (
+                        <img src={event.images[0]} alt={event.title} loading="lazy" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
+                      )}
                       {event.images.length > 1 && (
                         <div className="absolute bottom-3 right-3 bg-black/70 text-white px-3 py-1 rounded-full text-sm flex items-center space-x-1">
                           <Camera className="w-4 h-4" />
@@ -1275,6 +1235,83 @@ const QLWebsite = () => {
 
       {/* Calendar Section */}
       <CalendarSection editMode={editMode} />
+
+      {/* Members Section */}
+      <section id="members" className="py-20 px-4">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-16">
+            <h3 className="text-4xl md:text-5xl font-light text-slate-900 mb-4">Our Members</h3>
+            <p className="text-slate-600 text-lg">다양한 분야의 전문가들이 함께합니다</p>
+            <div className="h-1 w-24 bg-amber-600 mx-auto mt-6"></div>
+          </div>
+
+          {/* 대표단 */}
+          <div className="mb-8">
+            <button
+              onClick={() => toggleGroup('leadership')}
+              className="flex items-center justify-between w-full group mb-6"
+            >
+              <div className="flex items-center space-x-3">
+                <Star className="w-6 h-6 text-amber-600" />
+                <h4 className="text-3xl font-light text-slate-900">대표단</h4>
+                <span className="text-sm text-slate-400 ml-2">{LEADERSHIP.length}명</span>
+              </div>
+              <ChevronLeft className={`w-5 h-5 text-slate-400 transition-transform duration-300 ${expandedGroups.leadership ? '-rotate-90' : 'rotate-180'}`} />
+            </button>
+            {expandedGroups.leadership && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-8">
+                {LEADERSHIP.map((member, idx) => (
+                  <MemberCard key={idx} member={member} />
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* 운영진 */}
+          <div className="mb-8">
+            <button
+              onClick={() => toggleGroup('staff')}
+              className="flex items-center justify-between w-full group mb-6"
+            >
+              <div className="flex items-center space-x-3">
+                <Award className="w-6 h-6 text-blue-600" />
+                <h4 className="text-3xl font-light text-slate-900">운영진</h4>
+                <span className="text-sm text-slate-400 ml-2">{STAFF.length}명</span>
+              </div>
+              <ChevronLeft className={`w-5 h-5 text-slate-400 transition-transform duration-300 ${expandedGroups.staff ? '-rotate-90' : 'rotate-180'}`} />
+            </button>
+            {expandedGroups.staff && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-8">
+                {STAFF.map((member, idx) => (
+                  <MemberCard key={idx} member={member} />
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* 회원 */}
+          <div>
+            <button
+              onClick={() => toggleGroup('members')}
+              className="flex items-center justify-between w-full group mb-6"
+            >
+              <div className="flex items-center space-x-3">
+                <UserCheck className="w-6 h-6 text-emerald-600" />
+                <h4 className="text-3xl font-light text-slate-900">회원</h4>
+                <span className="text-sm text-slate-400 ml-2">{MEMBERS.length}명</span>
+              </div>
+              <ChevronLeft className={`w-5 h-5 text-slate-400 transition-transform duration-300 ${expandedGroups.members ? '-rotate-90' : 'rotate-180'}`} />
+            </button>
+            {expandedGroups.members && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+                {MEMBERS.map((member, idx) => (
+                  <MemberCard key={idx} member={member} />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
 
       {/* Footer */}
       <footer className="bg-slate-900 text-white py-12 px-4">
