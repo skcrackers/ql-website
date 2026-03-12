@@ -273,8 +273,11 @@ const CalendarSection = ({ editMode = false, memberNames = [] }) => {
   const isUpdatesEvent = (event) => event?.type === '근황토크';
 
   // 근황토크 제목 자동생성 (예: 4월 근황토크)
+  // dateStr 없으면 캘린더에 현재 선택된 월(currentDate) 사용
   const getUpdatesEventTitle = (dateStr) => {
-    const d = dateStr ? new Date(dateStr + 'T00:00:00') : new Date();
+    const d = dateStr
+      ? new Date(dateStr + 'T00:00:00')
+      : new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
     return `${d.getMonth() + 1}월 근황토크`;
   };
 
