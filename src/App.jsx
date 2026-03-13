@@ -581,7 +581,6 @@ const QLWebsite = () => {
     { name: 'Culture Code', id: 'culture' },
     { name: 'Events', id: 'events' },
     { name: 'Calendar', id: 'calendar' },
-    { name: 'Finance', id: 'finance' },
     { name: 'Members', id: 'members' }
   ];
 
@@ -1390,8 +1389,8 @@ const QLWebsite = () => {
         memberNames={[...LEADERSHIP, ...STAFF, ...MEMBERS].map((m) => m.name).sort()}
       />
 
-      {/* Finance Section */}
-      <ExpenseSection editMode={editMode} />
+      {/* Finance Section - 준비중 */}
+      {/* <ExpenseSection editMode={editMode} /> */}
 
       {/* Members Section */}
       <section id="members" className="py-20 px-4">

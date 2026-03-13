@@ -627,7 +627,7 @@ const CalendarSection = ({ editMode = false, memberNames = [] }) => {
                 </div>
 
                 {/* 날짜 & 시간 */}
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-2">
                       날짜 *
@@ -643,7 +643,7 @@ const CalendarSection = ({ editMode = false, memberNames = [] }) => {
                         }
                         setEventForm(updates);
                       }}
-                      className="w-full px-4 py-3 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 text-base"
+                      className="w-full px-3 py-3 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 text-base"
                     />
                   </div>
                   <div>
@@ -654,7 +654,7 @@ const CalendarSection = ({ editMode = false, memberNames = [] }) => {
                       type="time"
                       value={eventForm.time}
                       onChange={(e) => setEventForm({ ...eventForm, time: e.target.value })}
-                      className="w-full px-4 py-3 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 text-base"
+                      className="w-full px-3 py-3 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 text-base"
                     />
                   </div>
                 </div>
