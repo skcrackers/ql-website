@@ -3,6 +3,7 @@ import { flushSync } from 'react-dom';
 import { Menu, X, Calendar, Users, BookOpen, ExternalLink, Mail, Instagram, Linkedin, ChevronRight, ChevronLeft, Phone, MapPin, Star, Award, UserCheck, Edit3, Plus, Trash2, Save, Lock, Camera, Upload } from 'lucide-react';
 import { supabase } from '../supabase';
 import CalendarSection from './CalendarSection';
+import ExpenseSection from './ExpenseSection';
 
 const CHUNK_SIZE = 3 * 1024 * 1024; // Vercel 4.5MB 제한 (멀티파트 오버헤드 고려)
 
@@ -580,6 +581,7 @@ const QLWebsite = () => {
     { name: 'Culture Code', id: 'culture' },
     { name: 'Events', id: 'events' },
     { name: 'Calendar', id: 'calendar' },
+    { name: 'Finance', id: 'finance' },
     { name: 'Members', id: 'members' }
   ];
 
@@ -1387,6 +1389,9 @@ const QLWebsite = () => {
         editMode={editMode}
         memberNames={[...LEADERSHIP, ...STAFF, ...MEMBERS].map((m) => m.name).sort()}
       />
+
+      {/* Finance Section */}
+      <ExpenseSection editMode={editMode} />
 
       {/* Members Section */}
       <section id="members" className="py-20 px-4">
